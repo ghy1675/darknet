@@ -1,6 +1,1 @@
-
-
-./darknet detector demo ./cfg/coco.data ./cfg/yolov3.cfg ./yolov3.weights test50.mp4 -i 0 -thresh 0.25
-
-
-
+./darknet detector demo ./cfg/coco.data ./cfg/yolov3-tiny.cfg ./yolov3-tiny.weights Video_5.mp4 -i 0 -thresh 0.25
