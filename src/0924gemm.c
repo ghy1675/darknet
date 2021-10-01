@@ -9,7 +9,6 @@
 #include <float.h>
 #include <string.h>
 #include <stdint.h>
-<<<<<<< HEAD
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -31,41 +30,6 @@
 //#define _GNU_SOURCE
 //#define O_RDWR 02
 //#define O_SYNC 10000
-=======
-#if defined(_OPENMP)
-#include <omp.h>
-#endif
-
-#if defined(_MSC_VER)
-#if defined(_M_ARM) || defined(_M_ARM64)
-static inline uint32_t popcnt(uint32_t v) {
-  v = v - ((v >> 1) & 0x55555555);
-  v = (v & 0x33333333) + ((v >> 2) & 0x33333333);
-  return ((v + (v >> 4) & 0xF0F0F0F) * 0x1010101) >> 24;
-}
-#define POPCNT(x) popcnt((x))
-#define POPCNT64(x) (popcnt((unsigned)(x)) + popcnt((unsigned)((uint64_t)(x) >> 32)))
-#else
-#include <intrin.h>
-#ifdef _WIN64
-#define POPCNT(x) __popcnt(x)
-#define POPCNT64(x) __popcnt64(x)
-#else
-static inline int popcnt_64(uint64_t val64) {
-  int tmp_count = __popcnt(val64);
-  tmp_count += __popcnt(val64 >> 32);
-  return tmp_count;
-}
-#define POPCNT(x) __popcnt(x)
-#define POPCNT64(x) popcnt_64(x)
-#endif
-#endif
-#elif defined(__GNUC__)
-#define POPCNT(x) __builtin_popcount(x)
-#define POPCNT64(x) __builtin_popcountll(x)
-#endif
-
->>>>>>> 9ff8653d999c8a22bc8f1ff4f4a8a3cc5b63d255
 #define TILE_M 4 // 4 ops
 #define TILE_N 16 // AVX2 = 2 ops * 8 floats
 #define TILE_K 16 // loop
@@ -225,188 +189,6 @@ void binary_int64_printf(uint64_t src) {
     printf("\n");
 }
 
-<<<<<<< HEAD
-=======
-/*
-void gemm_nn_custom_bin_mean(int M, int N, int K, float ALPHA_UNUSED,
-    unsigned char *A, int lda,
-    unsigned char *B, int ldb,
-    float *C, int ldc, float *mean_arr)
-{
-    int *count_arr = xcalloc(M*N, sizeof(int));
-
-    int i, j, k;
-    for (i = 0; i < M; ++i) {   // l.n - filters [16 - 55 - 1024]
-        for (k = 0; k < K; ++k) {   // l.size*l.size*l.c - one filter size [27 - 9216]
-            char a_bit = get_bit(A, i*lda + k);
-
-            for (j = 0; j < N; ++j) { // out_h*out_w - one channel output size [169 - 173056]
-                char b_bit = get_bit(B, k*ldb + j);
-                count_arr[i*ldc + j] += xnor(a_bit, b_bit);
-            }
-        }
-    }
-
-    for (i = 0; i < M; ++i) {
-        float mean_val = mean_arr[i];
-        for (j = 0; j < N; ++j) {
-            C[i*ldc + j] = (2 * count_arr[i*ldc + j] - K) * mean_val;
-        }
-    }
-    free(count_arr);
-}
-*/
-
-/*
-void gemm_nn_custom_bin_mean_transposed(int M, int N, int K, float ALPHA_UNUSED,
-    unsigned char *A, int lda,
-    unsigned char *B, int ldb,
-    float *C, int ldc, float *mean_arr)
-{
-    int *count_arr = xcalloc(M*N, sizeof(int));
-
-    int i, j, k;
-    for (i = 0; i < M; ++i) {   // l.n - filters [16 - 55 - 1024]
-        for (j = 0; j < N; ++j) { // out_h*out_w - one channel output size [169 - 173056]
-            for (k = 0; k < K; ++k) {   // l.size*l.size*l.c - one filter size [27 - 9216]
-                char a_bit = get_bit(A, i*lda + k);
-                char b_bit = get_bit(B, j*ldb + k);
-                count_arr[i*ldc + j] += xnor(a_bit, b_bit);
-            }
-        }
-    }
-
-    for (i = 0; i < M; ++i) {
-        float mean_val = mean_arr[i];
-        for (j = 0; j < N; ++j) {
-            C[i*ldc + j] = (2 * count_arr[i*ldc + j] - K) * mean_val;
-        }
-    }
-    free(count_arr);
-}
-*/
-
-/*
-void gemm_nn_custom_bin_mean(int M, int N, int K, float ALPHA_UNUSED,
-    unsigned char *A, int lda,
-    unsigned char *B, int ldb,
-    float *C, int ldc, float *mean_arr)
-{
-    int *count_arr = xcalloc(M*N, sizeof(int));
-
-    int i;
-
-#pragma omp parallel for
-    for (i = 0; i < M; ++i) {   // l.n - filters [16 - 55 - 1024]
-        int j, k, h;
-        for (k = 0; k < K; ++k) {   // l.size*l.size*l.c - one filter size [27 - 9216]
-            const char a_bit = get_bit(A, i*lda + k);
-            uint64_t a_bit64 = fill_bit_int64(a_bit);
-            int  k_ldb = k*ldb;
-
-            for (j = 0; j < N; j += 64) { // out_h*out_w - one channel output size [169 - 173056]
-                if ((N - j > 64) && (k_ldb % 8 == 0)) {
-                    uint64_t b_bit64 = *((uint64_t *)(B + (k_ldb + j) / 8));
-                    uint64_t c_bit64 = xnor_int64(a_bit64, b_bit64);
-                    //printf("\n %d \n",__builtin_popcountll(c_bit64)); // gcc
-                    printf("\n %d \n", POPCNT64(c_bit64));    // msvs
-
-                    int h;
-                    for (h = 0; h < 64; ++h)
-                        if ((c_bit64 >> h) & 1) count_arr[i*ldc + j + h] += 1;
-
-                    //binary_int64_printf(a_bit64);
-                    //binary_int64_printf(b_bit64);
-                    //binary_int64_printf(c_bit64);
-                }
-                else {
-                    for (; j < N; ++j) { // out_h*out_w - one channel output size [169 - 173056]
-                        char b_bit = get_bit(B, k_ldb + j);
-                        if (xnor(a_bit, b_bit)) count_arr[i*ldc + j] += 1;
-                    }
-                }
-
-            }
-        }
-    }
-
-    if (mean_arr) {
-        //int K_2 = K / 2;
-        for (i = 0; i < M; ++i) {
-            float mean_val = mean_arr[i];
-            //float mean_val2 = 2 * mean_val;
-            for (j = 0; j < N; ++j) {
-                C[i*ldc + j] = (2 * count_arr[i*ldc + j] - K) * mean_val;
-                //C[i*ldc + j] = (count_arr[i*ldc + j] - K_2) *mean_val2;
-            }
-        }
-    }
-    else {
-        for (i = 0; i < M; ++i) {
-            for (j = 0; j < N; ++j) {
-                C[i*ldc + j] = count_arr[i*ldc + j] - K / 2;
-            }
-        }
-    }
-
-    free(count_arr);
-
-    //getchar();
-}
-*/
-
-
-/*
-void gemm_nn_custom_bin_mean_transposed(int M, int N, int K, float ALPHA_UNUSED,
-    unsigned char *A, int lda,
-    unsigned char *B, int ldb,
-    float *C, int ldc, float *mean_arr)
-{
-    int i;
-
-#pragma omp parallel for
-    for (i = 0; i < M; ++i) {   // l.n - filters [16 - 55 - 1024]
-        int j, k, h;
-        float mean_val = mean_arr[i];
-
-        for (j = 0; j < N; ++j) { // out_h*out_w - one channel output size [169 - 173056]
-            int count = 0;
-
-            for (k = 0; k < K; k += 64) {   // l.size*l.size*l.c - one filter size [27 - 9216]
-                uint64_t a_bit64 = *((uint64_t *)(A + (i*lda + k) / 8));
-                uint64_t b_bit64 = *((uint64_t *)(B + (j*ldb + k) / 8));
-                uint64_t c_bit64 = xnor_int64(a_bit64, b_bit64);
-
-                int tmp_count = POPCNT64(c_bit64);
-
-                if (K - k < 64)  tmp_count = tmp_count - (64 - (K - k));    // remove extra bits
-                count += tmp_count;
-                //binary_int64_printf(c_bit64);
-                //printf(", count = %d \n\n", tmp_count);
-            }
-
-            C[i*ldc + j] = (2 * count - K) * mean_val;
-        }
-    }
-}
-*/
-
-//----------------------------
-
-// is not used
-/*
-void transpose_32x32_bits_my(uint32_t *A, uint32_t *B, int lda, int ldb)
-{
-    unsigned int x, y;
-    for (y = 0; y < 32; ++y) {
-        for (x = 0; x < 32; ++x) {
-            if (A[y * lda] & ((uint32_t)1 << x)) B[x * ldb] |= (uint32_t)1 << y;
-        }
-    }
-}
-*/
-
->>>>>>> 9ff8653d999c8a22bc8f1ff4f4a8a3cc5b63d255
 #ifndef GPU
 uint8_t reverse_8_bit(uint8_t a) {
     return ((a * 0x0802LU & 0x22110LU) | (a * 0x8020LU & 0x88440LU)) * 0x10101LU >> 16;
@@ -579,7 +361,17 @@ void transpose_bin(uint32_t *A, uint32_t *B, const int n, const int m,
     }
 }
 
-#if (defined(__AVX__) && defined(__x86_64__)) || (defined(_WIN64) && !defined(__MINGW32__) && !defined(_M_ARM64))
+static inline int popcnt_32(uint32_t val32) {
+#ifdef WIN32  // Windows MSVS
+    int tmp_count = __popcnt(val32);
+#else   // Linux GCC
+    int tmp_count = __builtin_popcount(val32);
+#endif
+    return tmp_count;
+}
+//----------------------------
+
+#if (defined(__AVX__) && defined(__x86_64__)) || (defined(_WIN64) && !defined(__MINGW32__))
 
 #if (defined(_WIN64) && !defined(__MINGW64__))
 #include <intrin.h>
@@ -934,14 +726,14 @@ void gemm_nn_bin_32bit_packed(int M, int N, int K, float ALPHA,
 
                 // waiting for - CPUID Flags: AVX512VPOPCNTDQ: __m512i _mm512_popcnt_epi32(__m512i a)
                 __m256 count = _mm256_setr_ps(
-                    POPCNT(_mm256_extract_epi32(xnor256, 0)),
-                    POPCNT(_mm256_extract_epi32(xnor256, 1)),
-                    POPCNT(_mm256_extract_epi32(xnor256, 2)),
-                    POPCNT(_mm256_extract_epi32(xnor256, 3)),
-                    POPCNT(_mm256_extract_epi32(xnor256, 4)),
-                    POPCNT(_mm256_extract_epi32(xnor256, 5)),
-                    POPCNT(_mm256_extract_epi32(xnor256, 6)),
-                    POPCNT(_mm256_extract_epi32(xnor256, 7)));
+                    popcnt_32(_mm256_extract_epi32(xnor256, 0)),
+                    popcnt_32(_mm256_extract_epi32(xnor256, 1)),
+                    popcnt_32(_mm256_extract_epi32(xnor256, 2)),
+                    popcnt_32(_mm256_extract_epi32(xnor256, 3)),
+                    popcnt_32(_mm256_extract_epi32(xnor256, 4)),
+                    popcnt_32(_mm256_extract_epi32(xnor256, 5)),
+                    popcnt_32(_mm256_extract_epi32(xnor256, 6)),
+                    popcnt_32(_mm256_extract_epi32(xnor256, 7)));
 
                 __m256 val2 = _mm256_set1_ps(2);
                 count = _mm256_mul_ps(count, val2);     // count * 2
@@ -961,7 +753,7 @@ void gemm_nn_bin_32bit_packed(int M, int N, int K, float ALPHA,
             {
                 PUT_IN_REGISTER uint32_t B_PART = B[s*ldb + j];
                 uint32_t xnor_result = ~(A_PART ^ B_PART);
-                int32_t count = POPCNT(xnor_result);  // must be Signed int
+                int32_t count = popcnt_32(xnor_result);  // must be Signed int
 
                 C[i*ldc + j] += (2 * count - 32) * mean_val;
             }
@@ -1149,7 +941,13 @@ void convolution_2d(int w, int h, int ksize, int n, int c, int pad, int stride,
 
 static inline int popcnt128(__m128i n) {
     const __m128i n_hi = _mm_unpackhi_epi64(n, n);
-    return POPCNT64(_mm_cvtsi128_si64(n)) + POPCNT64(_mm_cvtsi128_si64(n_hi));
+#if defined(_MSC_VER)
+    return __popcnt64(_mm_cvtsi128_si64(n)) + __popcnt64(_mm_cvtsi128_si64(n_hi));
+#elif defined(__APPLE__) && defined(__clang__)
+    return _mm_popcnt_u64(_mm_cvtsi128_si64(n)) + _mm_popcnt_u64(_mm_cvtsi128_si64(n_hi));
+#else
+    return __popcntq(_mm_cvtsi128_si64(n)) + __popcntq(_mm_cvtsi128_si64(n_hi));
+#endif
 }
 
 static inline int popcnt256(__m256i n) {
@@ -2015,25 +1813,6 @@ void zero_init_mm(void *memory)
         *(volatile float*)virt_addr = 0x00;
         offset += 0x08;
     }
-    //printf("0 init done\n");
-}
-
-void read_mm(void *memory, int length, int c_offset, float *quantC)
-{
-    void* virt_addr;
-    
-    int l;
-    off_t offset=0x00;
-    float output;
-    
-    #pragma omp parallel for
-    for(l=0;l<length;l++)
-    {
-        virt_addr = memory + offset;
-        output = *((float*)virt_addr);
-        quantC[c_offset++] = output;
-        offset+=0x08;
-    }
 }
 void gemm_nn(int M, int N, int K, float ALPHA,
     float *A, int lda,
@@ -2069,12 +1848,6 @@ void gemm_nn(int M, int N, int K, float ALPHA,
     float omin_x = 10000;
     float omax_x = 0;
 
-    /* For MemBlock */
-    count = (block*3)-((block*3)%K);// 12288 - 3 = 12285
-    c_len = block*3/K; // 12288 / 27 = 455씩
-    pivot = (N*K)-(((N*K)/count)*count);
-    pivot = pivot/K;
-    
     /* Quantization Parameters*/
     for (k = 0; k < K; k++)
     {
@@ -2090,6 +1863,7 @@ void gemm_nn(int M, int N, int K, float ALPHA,
     quantize_8bits(A, fmin_x, fmax_x, K);
     quantize_8bits(B, imin_x, imax_x, N);
 
+    //if(flag)
     /* uint8_t Quantized Gemm NPU Mode */
     
     {
@@ -2097,10 +1871,26 @@ void gemm_nn(int M, int N, int K, float ALPHA,
         input = mmap(0, MAP_SIZE, PROT_WRITE | PROT_READ, MAP_SHARED, fd, MEM_BANK1);
         filter = mmap(0, MAP_SIZE, PROT_WRITE | PROT_READ, MAP_SHARED, fd, MEM_BANK4);
         psum = mmap(0, 65536, PROT_WRITE | PROT_READ, MAP_SHARED, fd, MEM_BANK7);
-
+        
+        //memset(psum, 0x00, 8192);
         /* Zero Init Filter, input*/
-        zero_init_mm(input);
-        zero_init_mm(filter);
+        #pragma omp parallel for
+        for(i=0;i<12288;i++)
+        {
+            virt_addr = filter + offset;
+            *(volatile float*)virt_addr = 0x00;
+            offset += 0x08;
+        }
+        offset = 0x00;
+        
+        #pragma omp parallel for
+        for(i=0;i<12288;i++)
+        {
+            virt_addr = input + offset;
+            *(volatile float*)virt_addr = 0x00;
+            offset += 0x08;
+        }
+        offset = 0x00;
         
         #pragma omp parallel for
         for(i=0;i<K;i++)
@@ -2109,13 +1899,17 @@ void gemm_nn(int M, int N, int K, float ALPHA,
             *(volatile float*)virt_addr = A[i];
             offset += 0x08;
         }
-        
         munmap(filter, MAP_SIZE);
         offset = 0x00;
-        
+        count = (block*3)-((block*3)%K);// 12288 - 3 = 12285
+        //c_len = block*3/K; // 12288 / 27 = 455씩
+        pivot = (N*K)-(((N*K)/count)*count);
+        pivot = pivot/K;
+        printf("pivot : %d\n",pivot);
         #pragma omp parallel for
         for (j = 0; j < N; ++j)
         {
+            
              for (k = 0; k < K; ++k) {
                 virt_addr = input + offset;
                 *(volatile float*)virt_addr = B[k * ldb + j];
@@ -2125,11 +1919,25 @@ void gemm_nn(int M, int N, int K, float ALPHA,
             if(ccnt==count)
             {
                 //Enable Signal
-                read_mm(psum, c_len, c_offset, quantC);
-                
+                for(l=0;l<c_len;l++)
+                {
+                    virt_addr = psum + offset;
+                    output = *((float*)virt_addr);
+                    quantC[c_offset++] = output;
+                    //printf("%X %f\n",virt_addr, output);
+                    offset+=0x08;
+                }
                 if(j==pivot)
-                    zero_init_mm(input);
-                
+                {   
+                    offset = 0x00;
+                    #pragma omp parallel for
+                    for(i=0;i<12288;i++)
+                    {
+                        virt_addr = input + offset;
+                        *(volatile float*)virt_addr = 0x00;
+                        offset += 0x08;
+                    }
+                }
                 ccnt=0;
                 offset = 0x00;
              }
@@ -2140,7 +1948,13 @@ void gemm_nn(int M, int N, int K, float ALPHA,
             offset = 0x00;
             
             //Enable Signal
-            read_mm(psum, tmp_c_len, c_offset, quantC);
+            for(l=0;l<tmp_c_len;l++)
+            {
+                virt_addr = psum + offset;
+                output = *((float*)virt_addr);
+                quantC[c_offset++] = output;
+                offset+=0x08;
+            } 
         }
         munmap(input, MAP_SIZE);
         close(fd); 
@@ -2212,7 +2026,7 @@ void gemm_nn_bin_32bit_packed(int M, int N, int K, float ALPHA,
                 PUT_IN_REGISTER uint32_t B_PART = B[s * ldb + j];
                 uint32_t xnor_result = ~(A_PART ^ B_PART);
                 //printf(" xnor_result = %d, ", xnor_result);
-                int32_t count = POPCNT(xnor_result);  // must be Signed int
+                int32_t count = popcnt_32(xnor_result);  // must be Signed int
 
                 C[i*ldc + j] += (2 * count - 32) * mean_val;
                 //c[i*n + j] += count*mean;
@@ -2270,6 +2084,25 @@ void convolution_2d(int w, int h, int ksize, int n, int c, int pad, int stride,
     }
 }
 
+static inline int popcnt_64(uint64_t val64) {
+#ifdef WIN32  // Windows
+#ifdef _WIN64 // Windows 64-bit
+    int tmp_count = __popcnt64(val64);
+#else         // Windows 32-bit
+    int tmp_count = __popcnt(val64);
+    tmp_count += __popcnt(val64 >> 32);
+#endif
+#else   // Linux
+#if defined(__x86_64__) || defined(__aarch64__)  // Linux 64-bit
+    int tmp_count = __builtin_popcountll(val64);
+#else  // Linux 32-bit
+    int tmp_count = __builtin_popcount(val64);
+    tmp_count += __builtin_popcount(val64 >> 32);
+#endif
+#endif
+    return tmp_count;
+}
+
 void gemm_nn_custom_bin_mean_transposed(int M, int N, int K, float ALPHA_UNUSED,
     unsigned char *A, int lda,
     unsigned char *B, int ldb,
@@ -2290,7 +2123,7 @@ void gemm_nn_custom_bin_mean_transposed(int M, int N, int K, float ALPHA_UNUSED,
                 uint64_t b_bit64 = *((uint64_t *)(B + (j*ldb + k) / 8));
                 uint64_t c_bit64 = xnor_int64(a_bit64, b_bit64);
 
-                int tmp_count = POPCNT64(c_bit64);
+                int tmp_count = popcnt_64(c_bit64);
 
                 if (K - k < 64)  tmp_count = tmp_count - (64 - (K - k));    // remove extra bits
                 count += tmp_count;
@@ -2690,7 +2523,7 @@ void gemm_nn_bin_transposed_32bit_packed(int M, int N, int K, float ALPHA,
                 PUT_IN_REGISTER uint32_t A_PART = ((uint32_t*)A)[i*lda + s];
                 PUT_IN_REGISTER uint32_t B_PART = ((uint32_t*)B)[j * ldb + s];
                 uint32_t xnor_result = ~(A_PART ^ B_PART);
-                int32_t count = POPCNT(xnor_result);  // must be Signed int
+                int32_t count = popcnt_32(xnor_result);  // must be Signed int
 
                 val += (2 * count - 32) * mean_val;
             }
@@ -2753,7 +2586,7 @@ void convolution_repacked(uint32_t *packed_input, uint32_t *packed_weights, floa
                             uint32_t weight = ((uint32_t *)packed_weights)[fil*new_lda / 32 + chan*size*size + f_y*size + f_x];
 
                             uint32_t xnor_result = ~(input ^ weight);
-                            int32_t count = POPCNT(xnor_result); // mandatory Signed int
+                            int32_t count = popcnt_32(xnor_result); // mandatory Signed int
                             sum += (2 * count - 32) * mean_val;
                         }
                     }
