@@ -152,13 +152,12 @@ void activate_array_swish(float *x, const int n, float * output_sigmoid, float *
     memset(tmp, 0x00, BLOCK_SIZE);
     input = mmap(0, MAP_SIZE, PROT_WRITE | PROT_READ, MAP_SHARED, fd, MEM_BANK1);
     pivot = n/BLOCK_SIZE;
-    //printf("MEMCPY\n");
+    
     #pragma omp parallel for
     for(i=0;i<pivot;++i) memcpy(input,x+(i*BLOCK_SIZE),BLOCK_SIZE);
    
     if(n%BLOCK_SIZE!=0)
     {
-        printf("Remain\n");
         memcpy(tmp,x+(pivot*BLOCK_SIZE),n%BLOCK_SIZE);
         memcpy(input,tmp,n%BLOCK_SIZE);
     }
