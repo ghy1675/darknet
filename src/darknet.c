@@ -2,6 +2,8 @@
 #include <time.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <sys/mman.h>
+#include <fcntl.h>
 #if defined(_MSC_VER) && defined(_DEBUG)
 #include <crtdbg.h>
 #endif
@@ -11,7 +13,13 @@
 #include "dark_cuda.h"
 #include "blas.h"
 #include "connected_layer.h"
+//#include "npu.h"
 
+// Memory R/W
+#define MAP_SIZE 4096UL 			// Memory Paging Size 4KB
+#define MAP_MASK (MAP_SIZE - 1) 	// Memory Address Mask
+#define MAXLINE 511 				// buf max
+#define COMMAND_ERROR "Unknown command!!"
 
 extern void predict_classifier(char *datacfg, char *cfgfile, char *weightfile, char *filename, int top);
 extern void run_voxel(int argc, char **argv);
@@ -178,7 +186,7 @@ void partial(char *cfgfile, char *weightfile, char *outfile, int max)
     }
     *net.seen = 0;
     *net.cur_iteration = 0;
-    save_weights_upto(net, outfile, max, 0);
+    save_weights_upto(net, outfile, max);
 }
 
 #include "convolutional_layer.h"
@@ -441,6 +449,9 @@ int main(int argc, char **argv)
 #endif
 
 	int i;
+    int tmp;
+    off_t target = 0x400040000;
+    int fd = open("/dev/mem", O_RDWR | O_SYNC);
 	for (i = 0; i < argc; ++i) {
 		if (!argv[i]) continue;
 		strip_args(argv[i]);
@@ -495,6 +506,29 @@ int main(int argc, char **argv)
         float thresh = find_float_arg(argc, argv, "-thresh", .24);
 		int ext_output = find_arg(argc, argv, "-ext_output");
         char *filename = (argc > 4) ? argv[4]: 0;
+        if(argc > 5)
+        {
+            //write_SFR(fd,0x400040008,argv[5]);
+            void* map_base;
+            void* virt_addr;
+            map_base = mmap(0, MAP_SIZE, PROT_WRITE | PROT_READ, MAP_SHARED, fd, target & ~MAP_MASK);
+            virt_addr = map_base + (target & MAP_MASK);
+            *(volatile unsigned long*)virt_addr = argv[5];
+            munmap(map_base, MAP_SIZE);
+        }
+        else
+        {
+            printf("Insert Length To Compare With CPU Calc(hex) : ");
+            scanf("%x",&tmp);
+            void* map_base;
+            void* virt_addr;
+            map_base = mmap(0, MAP_SIZE, PROT_WRITE | PROT_READ, MAP_SHARED, fd, target & ~MAP_MASK);
+            virt_addr = map_base + (target & MAP_MASK);
+            *(volatile unsigned long*)virt_addr = tmp;
+            munmap(map_base, MAP_SIZE);
+            //write_SFR(fd,0x400040008,tmp);
+        }
+        close(fd);
         test_detector("cfg/coco.data", argv[2], argv[3], filename, thresh, 0.5, 0, ext_output, 0, NULL, 0, 0);
     } else if (0 == strcmp(argv[1], "cifar")){
         run_cifar(argc, argv);

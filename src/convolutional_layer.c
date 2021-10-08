@@ -241,7 +241,7 @@ void cudnn_convolutional_setup(layer *l, int cudnn_preference, size_t workspace_
 #endif
 #else   //if(CUDNN_MAJOR >= 7)
     if (l->groups > 1) {
-        error("CUDNN < 7 doesn't support groups, please upgrade!", DARKNET_LOC);
+        error("CUDNN < 7 doesn't support groups, please upgrade!");
     }
 #endif
 
@@ -566,9 +566,6 @@ convolutional_layer make_convolutional_layer(int batch, int steps, int h, int w,
         if (train) {
             l.weight_updates = (float*)xcalloc(l.nweights, sizeof(float));
             l.bias_updates = (float*)xcalloc(n, sizeof(float));
-
-            l.weights_ema = (float*)xcalloc(l.nweights, sizeof(float));
-            l.biases_ema = (float*)xcalloc(n, sizeof(float));
         }
     }
 
@@ -640,7 +637,6 @@ convolutional_layer make_convolutional_layer(int batch, int steps, int h, int w,
                 l.scales[i] = 1;
             }
             if (train) {
-                l.scales_ema = (float*)xcalloc(n, sizeof(float));
                 l.scale_updates = (float*)xcalloc(n, sizeof(float));
 
                 l.mean = (float*)xcalloc(n, sizeof(float));
@@ -1207,12 +1203,17 @@ size_t binary_transpose_align_input(int k, int n, float *b, char **t_bit_input, 
 }
 
 
-void forward_convolutional_layer(convolutional_layer l, network_state state)
+void forward_convolutional_layer(convolutional_layer l, network_state state) //keti
 {
     int out_h = convolutional_out_height(l);
     int out_w = convolutional_out_width(l);
     int i, j;
 
+    //keti clock
+    //clock_t start, end;
+    struct timeval tv;
+    double start, end, total=0.0;
+    
     fill_cpu(l.outputs*l.batch, 0, l.output, 1);
 
     if (l.xnor && (!l.align_bit_weights || state.train)) {
@@ -1231,7 +1232,7 @@ void forward_convolutional_layer(convolutional_layer l, network_state state)
 
     static int u = 0;
     u++;
-
+    
     for(i = 0; i < l.batch; ++i)
     {
         for (j = 0; j < l.groups; ++j)
@@ -1239,7 +1240,7 @@ void forward_convolutional_layer(convolutional_layer l, network_state state)
             float *a = l.weights +j*l.nweights / l.groups;
             float *b = state.workspace;
             float *c = l.output +(i*l.groups + j)*n*m;
-
+            float *quantC = l.output +(i*l.groups + j)*n*m;
             //gemm(0,0,m,n,k,1,a,k,b,n,1,c,n);
             //gemm_nn_custom(m, n, k, 1, a, k, b, n, c, n);
             if (l.xnor && l.align_bit_weights && !state.train && l.stride_x == l.stride_y)
@@ -1382,16 +1383,27 @@ void forward_convolutional_layer(convolutional_layer l, network_state state)
                         l.stride_y, l.stride_x, // stride (h, w)
                         l.dilation, l.dilation, // dilation (h, w)
                         b);                 // output
-
+                   
                 }
-
-                gemm(0, 0, m, n, k, 1, a, k, b, n, 1, c, n);
+               // start = clock();
+                //gettimeofday(&tv, NULL);
+                //start = (tv.tv_sec) * 1000 + (tv.tv_usec) / 1000 ;
+                gemm(0, 0, m, n, k, 1, a, k, b, n, 1, c, n, quantC);
+                //end = clock();
+                //gettimeofday(&tv, NULL);
+                //end = (tv.tv_sec) * 1000 + (tv.tv_usec) / 1000 ;
+                //printf("== gemm cost %.4f sec\n", (float)(end-start)/CLOCKS_PER_SEC);
+                //printf("== gemm cost %f\n", (end - start) / 1000);
+                //total = total + ((end - start) / 1000);
+                //printf("total : %lf\n", total);
+                //gemm(0, 0, m, n, k, 1, a, k, b, n, 1, c, n);
                 // bit-count to float
             }
             //c += n*m;
             //state.input += l.c*l.h*l.w;
         }
     }
+    
 
     if(l.batch_normalize){
         forward_batchnorm_layer(l, state);
@@ -1576,14 +1588,14 @@ void backward_convolutional_layer(convolutional_layer l, network_state state)
                 l.dilation, l.dilation, // dilation (h, w)
                 b);                 // output
 
-            gemm(0, 1, m, n, k, 1, a, k, b, k, 1, c, n);
+            //gemm(0, 1, m, n, k, 1, a, k, b, k, 1, c, n);
 
             if (state.delta) {
                 a = l.weights + j*l.nweights / l.groups;
                 b = l.delta + (i*l.groups + j)*m*k;
                 c = state.workspace;
 
-                gemm(1, 0, n, k, m, 1, a, n, b, k, 0, c, k);
+                //gemm(1, 0, n, k, m, 1, a, n, b, k, 0, c, k);
 
                 //col2im_cpu(state.workspace, l.c / l.groups, l.h, l.w, l.size, l.stride,
                 //     l.pad, state.delta + (i*l.groups + j)*l.c / l.groups*l.h*l.w);

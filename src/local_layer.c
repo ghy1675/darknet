@@ -113,7 +113,7 @@ void forward_local_layer(const local_layer l, network_state state)
             int n = 1;
             int k = l.size*l.size*l.c;
 
-            gemm(0,0,m,n,k,1,a,k,b,locations,1,c,locations);
+            //gemm(0,0,m,n,k,1,a,k,b,locations,1,c,locations);
         }
     }
     activate_array(l.output, l.outputs*l.batch, l.activation);
@@ -143,7 +143,7 @@ void backward_local_layer(local_layer l, network_state state)
             int n = l.size*l.size*l.c;
             int k = 1;
 
-            gemm(0,1,m,n,k,1,a,locations,b,locations,1,c,n);
+            //gemm(0,1,m,n,k,1,a,locations,b,locations,1,c,n);
         }
 
         if(state.delta){
@@ -156,7 +156,7 @@ void backward_local_layer(local_layer l, network_state state)
                 int n = 1;
                 int k = l.n;
 
-                gemm(1,0,m,n,k,1,a,m,b,locations,0,c,locations);
+                //gemm(1,0,m,n,k,1,a,m,b,locations,0,c,locations);
             }
 
             col2im_cpu(l.col_image, l.c,  l.h,  l.w,  l.size,  l.stride, l.pad, state.delta+i*l.c*l.h*l.w);

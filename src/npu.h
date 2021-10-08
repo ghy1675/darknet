@@ -46,6 +46,55 @@
 #define MAP_MASK (MAP_SIZE - 1) 	// Memory Address Mask
 #define MAXLINE 511 				// buf max
 #define COMMAND_ERROR "Unknown command!!"
+#define BLOCK_SIZE 12288
+
+int intbox[BLOCK_SIZE];
+float floatbox[BLOCK_SIZE];
+
+void zero_init_mm(void *memory)
+{
+    int i;
+    off_t offset=0x00;
+    void* virt_addr;
+    memcpy(memory, intbox, BLOCK_SIZE);
+}
+
+void read_mm(void *memory, int length, int c_offset, float *quantC)
+{
+    void* virt_addr;
+    
+    int l;
+    off_t offset=0x00;
+    float output;
+    
+    #pragma omp parallel for
+    for(l=0;l<length;l++)
+    {
+        virt_addr = memory + offset;
+        output = *((float*)virt_addr);
+        quantC[c_offset++] = output;
+        offset+=0x08;
+    }
+}
+
+void quantize_8bits(float x[], float min, float max, int len) {
+    uint8_t temp[len]; 
+    
+    int i;
+    float scale = (max - min) / 255;
+    uint8_t zero_point = 0 - round(min / scale);
+    
+    for (i = 0; i < len; i++) 
+    {
+        temp[i] = (uint8_t)round(x[i] / scale) + zero_point;
+    }
+
+    for (i = 0; i < len; i++) 
+    {
+        x[i] = (temp[i] - zero_point) * scale;
+    }
+    // dequantize
+}
 
 //float read_SFR(int fd, off_t target);
 //void write_SFR(int fd, off_t target, unsigned long value);

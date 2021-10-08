@@ -6,6 +6,8 @@
 #include <string.h>
 #include <float.h>
 
+#define BLOCK_SIZE 12288
+
 char *get_activation_string(ACTIVATION a)
 {
     switch(a){
@@ -137,7 +139,26 @@ void activate_array(float *x, const int n, const ACTIVATION a)
 
 void activate_array_swish(float *x, const int n, float * output_sigmoid, float * output)
 {
-    int i;
+    int i, fd;
+    float tmp[BLOCK_SIZE];
+    /*
+    int fd = open("/dev/mem",O_RDWR|O_SYNC);
+    off_t MEM_BANK1 = 0x400000000;
+    
+    memset(tmp, 0x00, BLOCK_SIZE);
+    input = mmap(0, MAP_SIZE, PROT_WRITE | PROT_READ, MAP_SHARED, fd, MEM_BANK1);
+    pivot = n/BLOCK_SIZE;
+    #pragma omp parallel for
+    for(i=0;i<pivot;++i)
+    {
+        memcpy(input,n[i*BLOCK_SIZE],BLOCK_SIZE);
+    }
+    if(n%BLOCK_SIZE!=0)
+    {
+        memcpy(tmp,n[pivot*BLOCK_SIZE],n%BLOCK_SIZE);
+        memcpy(input,tmp,n%BLOCK_SIZE);
+    }
+    */
     #pragma omp parallel for
     for (i = 0; i < n; ++i) {
         float x_val = x[i];
@@ -151,7 +172,8 @@ void activate_array_swish(float *x, const int n, float * output_sigmoid, float *
 void activate_array_mish(float *x, const int n, float * activation_input, float * output)
 {
     const float MISH_THRESHOLD = 20;
-    int i;
+    int i, pivot;
+
     #pragma omp parallel for
     for (i = 0; i < n; ++i) {
         float x_val = x[i];
