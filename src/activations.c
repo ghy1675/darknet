@@ -5,8 +5,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include <float.h>
+#include <fcntl.h>
+#include <sys/mman.h>
 
 #define BLOCK_SIZE 12288
+#define MAP_SIZE 98304UL 			// Memory Paging Size 4KB
+#define MEM_BANK1 0x400000000
 
 char *get_activation_string(ACTIVATION a)
 {
@@ -139,26 +143,26 @@ void activate_array(float *x, const int n, const ACTIVATION a)
 
 void activate_array_swish(float *x, const int n, float * output_sigmoid, float * output)
 {
-    int i, fd;
+    int i, pivot;
+    void *input;
     float tmp[BLOCK_SIZE];
-    /*
+    
     int fd = open("/dev/mem",O_RDWR|O_SYNC);
-    off_t MEM_BANK1 = 0x400000000;
     
     memset(tmp, 0x00, BLOCK_SIZE);
     input = mmap(0, MAP_SIZE, PROT_WRITE | PROT_READ, MAP_SHARED, fd, MEM_BANK1);
     pivot = n/BLOCK_SIZE;
+    //printf("MEMCPY\n");
     #pragma omp parallel for
-    for(i=0;i<pivot;++i)
-    {
-        memcpy(input,n[i*BLOCK_SIZE],BLOCK_SIZE);
-    }
+    for(i=0;i<pivot;++i) memcpy(input,x+(i*BLOCK_SIZE),BLOCK_SIZE);
+   
     if(n%BLOCK_SIZE!=0)
     {
-        memcpy(tmp,n[pivot*BLOCK_SIZE],n%BLOCK_SIZE);
+        printf("Remain\n");
+        memcpy(tmp,x+(pivot*BLOCK_SIZE),n%BLOCK_SIZE);
         memcpy(input,tmp,n%BLOCK_SIZE);
     }
-    */
+    
     #pragma omp parallel for
     for (i = 0; i < n; ++i) {
         float x_val = x[i];

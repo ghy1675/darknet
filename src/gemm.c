@@ -17,6 +17,7 @@
 #include <termios.h>
 #include <ctype.h>
 #include <errno.h>
+#include <memory.h>
 /* For NPU */
 #include <stdbool.h>
 #include "npu.h"
@@ -1750,7 +1751,7 @@ void gemm_nn(int M, int N, int K, float ALPHA,
 {
     int i, j, k;
     int count = 0;
-    int ccnt=0;
+    int pos=0;
 
     int c_len;
     int c_offset=0;
@@ -1803,7 +1804,6 @@ void gemm_nn(int M, int N, int K, float ALPHA,
     quantize_8bits(B, imin_x, imax_x, N);
     
     /* uint8_t Quantized Gemm NPU Mode */
-    
     zero_init_mm(input);
     zero_init_mm(filter);
 
@@ -1820,26 +1820,28 @@ void gemm_nn(int M, int N, int K, float ALPHA,
     for (j = 0; j < N; ++j)
     {
          for (k = 0; k < K; ++k) {
-            floatbox[ccnt] = B[k * ldb + j];
-            ccnt++;
+            floatbox[pos] = B[k * ldb + j];
+            pos++;
         }
-        if(ccnt==count)
+        if(pos==count)
         {
             memcpy(input,floatbox, BLOCK_SIZE);
             
             //Enable Signal
             read_mm(psum, c_len, c_offset, quantC);
             c_offset += c_len;
-            if(N==final+1+j) zero_init_mm(input);
+            if(N==final+1+j) zero_init_mm(input);//
 
             memset(floatbox,0,count*sizeof(float));
-            ccnt=0;
+            pos=0;
          }
     }
-    remain = ccnt/K;
+    
+    remain = pos/K;
     if(remain != 0)
     {
-        for(i=0;i<ccnt;i++)
+        #pragma omp parallel for
+        for(i=0;i<pos;i++)
         {
             virt_addr = input + offset;
             *(volatile float*)virt_addr = floatbox[i];
@@ -1848,10 +1850,10 @@ void gemm_nn(int M, int N, int K, float ALPHA,
         //Enable Signal
         read_mm(psum, remain, c_offset, quantC);
     }
-
     munmap(filter, MAP_SIZE);
     munmap(input, MAP_SIZE);
     close(fd); 
+    
     /* uint8_t Quantized Gemm CPU Mode */
     #pragma omp parallel for
     for (k = 0; k < K; ++k) 
