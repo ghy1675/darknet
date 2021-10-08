@@ -143,7 +143,10 @@ void activate_array(float *x, const int n, const ACTIVATION a)
 
 void activate_array_swish(float *x, const int n, float * output_sigmoid, float * output)
 {
-    int i, pivot;
+    int i;
+    
+    /* For NPU */
+    int pivot;
     void *input;
     float tmp[BLOCK_SIZE];
     
@@ -161,7 +164,7 @@ void activate_array_swish(float *x, const int n, float * output_sigmoid, float *
         memcpy(tmp,x+(pivot*BLOCK_SIZE),n%BLOCK_SIZE);
         memcpy(input,tmp,n%BLOCK_SIZE);
     }
-    
+
     #pragma omp parallel for
     for (i = 0; i < n; ++i) {
         float x_val = x[i];
