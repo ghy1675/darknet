@@ -41,7 +41,6 @@
 
 
 #define TEST 1
-#define Quant 1
 
 #define min(a,b) a<b?a:b;
 #define max(a,b) a<b?b:a;
@@ -1757,15 +1756,23 @@ void gemm_nn(int M, int N, int K, float ALPHA,
 {
     int i, j, k;
     int count = 0;
-    int block = 24576;
+    int block = 4096;
     int pos=0;
     int pivot;
     int ccnt=0;
     int fd;
+    int c_offset=0;
+    int tmp_c_len;
+    
+    float tmpbox[12288];
     
     int c_len;
 
     clock_t start;
+    
+    /* For Cycle Check */
+    int remain;
+    int final;
     
     /* For Memory Access */
     void *input;
@@ -1783,18 +1790,16 @@ void gemm_nn(int M, int N, int K, float ALPHA,
     float omin_x = 10000;
     float omax_x = 0;
 
+     /* For MemBlock */
+
+    count = (block*3)-((block*3)%K);// 12288 - 3 = 12285
     
-    /* For MemBlock */
-    #ifdef TEST
-    count = (block)-((block)%K);// 12288 - 3 = 12285
-    
-    c_len = block/K; // 12288 / 27 = 455
+    c_len = block*3/K; // 12288 / 27 = 455
     pivot = (N*K)-(((N*K)/count)*count);
     pivot = pivot/K;
-    #endif
-    
-    /* Quantization Function*/
-    #ifdef Quant
+
+    /* Quantization Parameters*/
+    /*
     for (k = 0; k < K; k++)
     {
         fmin_x = min(fmin_x, A[k]);
@@ -1808,19 +1813,19 @@ void gemm_nn(int M, int N, int K, float ALPHA,
     
     quantize_8bits(A, fmin_x, fmax_x, K);
     quantize_8bits(B, imin_x, imax_x, N);
-    #endif
     
+    */
+    //printf("%d\n",M*N*K);
     /* uint8_t Quantized Gemm NPU Mode */
     //gettimeofday(&tv, NULL);
     //start = (tv.tv_sec) * 1000 + (tv.tv_usec) / 1000 ;
-    #ifdef TEST
+    
         fd = open("/dev/mem",O_RDWR|O_SYNC);
         input = mmap(0, MAP_SIZE, PROT_WRITE | PROT_READ, MAP_SHARED, fd, MEM_BANK1);
         filter = mmap(0, MAP_SIZE, PROT_WRITE | PROT_READ, MAP_SHARED, fd, MEM_BANK4);
         psum = mmap(0, 65536, PROT_WRITE | PROT_READ, MAP_SHARED, fd, MEM_BANK7);
       
         zero_init_mm(input);
-        memset(input, 0, sizeof(int)*MAP_SIZE); //bus error
         zero_init_mm(filter);
     
         
@@ -1835,34 +1840,59 @@ void gemm_nn(int M, int N, int K, float ALPHA,
             offset += 0x04;
         }
     
-        offset = 0x00;
         // B = Input   
-        c_len = N/(block);
         #pragma omp parallel for
         for (k = 0; k < K; ++k) 
         {
-            for (j = 0; j < c_len; j++) {
-                memcpy(input, &B[k*ldb+j*block], sizeof(int)*block);
+            for (j = 0; j < N/12288; j+=12288) {
+                memcpy(input, &B[j], sizeof(int)*12288);
             }
-            /*
-                Enable Signal
-            */
-            //zero_init_mm(input);
-            for(j=k*ldb+c_len*block;j<N;j++)
+            printf("j : %d\n",j);
+        } 
+        /*
+        #pragma omp parallel for
+        for (j = 0; j < N; ++j)
+        {
+             for (k = 0; k < K; ++k) {
+                tmpbox[ccnt] = B[k * ldb + j];
+                ccnt++;
+             }
+            if(ccnt==count)
+            {
+                memcpy(input,tmpbox, 12288);
+                
+                //Enable Signal
+                read_mm(psum, c_len, c_offset, quantC);
+                
+                // For Zero Init deprecated
+                //if(j==pivot)
+                    //zero_init_mm(input);
+                
+                memset(tmpbox,0,count*sizeof(float));
+                ccnt=0;
+                //offset = 0x00;
+             }
+        }
+
+        tmp_c_len = N %(block*3/K);
+    
+        if(tmp_c_len != 0)
+        {
+            #pragma omp parallel for
+            for(i=0;i<ccnt;i++)
             {
                 virt_addr = input + offset;
-                *(volatile float*)virt_addr = B[j];
-                offset += 0x04;
+                *(volatile float*)virt_addr = tmpbox[i];
+                offset += 0x08;
             }
-            /*
-                Enable Signal
-            */
         }
+           */
         munmap(filter, MAP_SIZE);
         munmap(input, MAP_SIZE);
         close(fd); 
-    #endif
+
     /* uint8_t Quantized Gemm CPU Mode */
+    
    #pragma omp parallel for
     for (k = 0; k < K; ++k) 
     {

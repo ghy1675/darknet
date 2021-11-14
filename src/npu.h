@@ -46,7 +46,7 @@
 #define MAP_MASK (MAP_SIZE - 1) 	// Memory Address Mask
 #define MAXLINE 511 				// buf max
 #define COMMAND_ERROR "Unknown command!!"
-#define BLOCK_SIZE 12288
+#define BLOCK_SIZE 24576
 
 int intbox[BLOCK_SIZE];
 float floatbox[BLOCK_SIZE];
