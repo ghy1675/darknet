@@ -21,8 +21,6 @@
 /* For NPU */
 #include <stdbool.h>
 #include "npu.h"
-#include <time.h>
-
 
 #ifdef _WIN32
 #include <intrin.h>
@@ -38,9 +36,6 @@
 #else
 #define PUT_IN_REGISTER register
 #endif
-
-
-#define TEST 1
 
 #define min(a,b) a<b?a:b;
 #define max(a,b) a<b?b:a;
@@ -1756,20 +1751,11 @@ void gemm_nn(int M, int N, int K, float ALPHA,
 {
     int i, j, k;
     int count = 0;
-    int block = 4096;
     int pos=0;
-    int pivot;
-    int ccnt=0;
-    int fd;
-    int c_offset=0;
-    int tmp_c_len;
-    
-    float tmpbox[12288];
-    
-    int c_len;
 
-    clock_t start;
-    
+    int c_len;
+    int c_offset=0;
+
     /* For Cycle Check */
     int remain;
     int final;
@@ -1778,7 +1764,6 @@ void gemm_nn(int M, int N, int K, float ALPHA,
     void *input;
     void *filter;
     void *psum;
-    off_t offset=0x00;
     
     void* virt_addr;
     
@@ -1790,110 +1775,9 @@ void gemm_nn(int M, int N, int K, float ALPHA,
     float omin_x = 10000;
     float omax_x = 0;
 
-     /* For MemBlock */
-
-    count = (block*3)-((block*3)%K);// 12288 - 3 = 12285
     
-    c_len = block*3/K; // 12288 / 27 = 455
-    pivot = (N*K)-(((N*K)/count)*count);
-    pivot = pivot/K;
-
-    /* Quantization Parameters*/
-    
-    for (k = 0; k < K; k++)
-    {
-        fmin_x = min(fmin_x, A[k]);
-        fmax_x = max(fmax_x, A[k]);
-        for (j = 0; j < N; j++)
-        {
-            imin_x = min(imin_x, B[k * ldb + j]);
-            imax_x = max(imax_x, B[k * ldb + j]);
-        } 
-    }
-    
-    quantize_8bits(A, fmin_x, fmax_x, K);
-    quantize_8bits(B, imin_x, imax_x, N);
-    
-    //printf("%d\n",M*N*K);
-    /* uint8_t Quantized Gemm NPU Mode */
-    //gettimeofday(&tv, NULL);
-    //start = (tv.tv_sec) * 1000 + (tv.tv_usec) / 1000 ;
-
-        fd = open("/dev/mem",O_RDWR|O_SYNC);
-        input = mmap(0, MAP_SIZE, PROT_WRITE | PROT_READ, MAP_SHARED, fd, MEM_BANK1);
-        filter = mmap(0, MAP_SIZE, PROT_WRITE | PROT_READ, MAP_SHARED, fd, MEM_BANK4);
-        psum = mmap(0, 65536, PROT_WRITE | PROT_READ, MAP_SHARED, fd, MEM_BANK7);
-      
-        zero_init_mm(input);
-        zero_init_mm(filter);
-       
-        
-        // A = Filter
-        
-        //ccnt = 4-(K%4);
-        memcpy(filter, A, sizeof(int)*(K-(K%4)));      
-    /*
-        offset = offset + (K/4*8);
-        #pragma omp parallel for
-        for(i=K-ccnt;i<K;i++)
-        {
-            virt_addr = filter + offset;
-            *(volatile float*)virt_addr = A[i];
-            offset += 0x04;
-        }
-      */  
-        /*
-        for(i=0;i<K;i++)
-        {
-            virt_addr = filter + offset;
-            *(volatile float*)virt_addr = A[i];
-            offset += 0x04;
-        }
-        */
-        //offset = 0x00;
-        
-        #pragma omp parallel for
-        for (j = 0; j < N; ++j)
-        {
-             for (k = 0; k < K; ++k) {
-                tmpbox[ccnt] = B[k * ldb + j];
-                ccnt++;
-             }
-            if(ccnt==count)
-            {
-                memcpy(input,tmpbox, 12288);
-                
-                //Enable Signal
-                read_mm(psum, c_len, c_offset, quantC);
-                
-                // For Zero Init deprecated
-                //if(j==pivot)
-                    //zero_init_mm(input);
-                
-                memset(tmpbox,0,count*sizeof(float));
-                ccnt=0;
-                //offset = 0x00;
-             }
-        }
-
-        tmp_c_len = N %(block*3/K);
-        if(tmp_c_len != 0)
-        {
-            for(i=0;i<ccnt;i++)
-            {
-                virt_addr = input + offset;
-                *(volatile float*)virt_addr = tmpbox[i];
-                offset += 0x08;
-            }
-        }
-       
-        munmap(filter, MAP_SIZE);
-        munmap(input, MAP_SIZE);
-        close(fd); 
-
     /* uint8_t Quantized Gemm CPU Mode */
-    
-   #pragma omp parallel for
+    #pragma omp parallel for
     for (k = 0; k < K; ++k) 
     {
         register float A_PART = A[k];
@@ -2597,7 +2481,7 @@ void gemm_cpu(int TA, int TB, int M, int N, int K, float ALPHA,
         int t;
         //gettimeofday(&tv, NULL);
         //start = (tv.tv_sec) * 1000 + (tv.tv_usec) / 1000 ;
-        //#pragma omp parallel for
+        #pragma omp parallel for
         for (t = 0; t < M; ++t) {
             if (!TA && !TB)
                 gemm_nn(1, N, K, ALPHA, A + t*lda, lda, B, ldb, C + t*ldc, ldc, quantC, flag);

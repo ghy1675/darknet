@@ -1791,13 +1791,13 @@ void gemm_nn(int M, int N, int K, float ALPHA,
     float omax_x = 0;
 
      /* For MemBlock */
-
+#ifdef TEST
     count = (block*3)-((block*3)%K);// 12288 - 3 = 12285
     
     c_len = block*3/K; // 12288 / 27 = 455
     pivot = (N*K)-(((N*K)/count)*count);
     pivot = pivot/K;
-
+   #endif 
     /* Quantization Parameters*/
     
     for (k = 0; k < K; k++)
@@ -1818,7 +1818,7 @@ void gemm_nn(int M, int N, int K, float ALPHA,
     /* uint8_t Quantized Gemm NPU Mode */
     //gettimeofday(&tv, NULL);
     //start = (tv.tv_sec) * 1000 + (tv.tv_usec) / 1000 ;
-
+    #ifdef TEST
         fd = open("/dev/mem",O_RDWR|O_SYNC);
         input = mmap(0, MAP_SIZE, PROT_WRITE | PROT_READ, MAP_SHARED, fd, MEM_BANK1);
         filter = mmap(0, MAP_SIZE, PROT_WRITE | PROT_READ, MAP_SHARED, fd, MEM_BANK4);
@@ -1827,38 +1827,34 @@ void gemm_nn(int M, int N, int K, float ALPHA,
         zero_init_mm(input);
         zero_init_mm(filter);
        
-        
-        // A = Filter
-        
-        //ccnt = 4-(K%4);
-        memcpy(filter, A, sizeof(int)*(K-(K%4)));      
-    /*
-        offset = offset + (K/4*8);
         #pragma omp parallel for
-        for(i=K-ccnt;i<K;i++)
-        {
-            virt_addr = filter + offset;
-            *(volatile float*)virt_addr = A[i];
-            offset += 0x04;
-        }
-      */  
-        /*
         for(i=0;i<K;i++)
         {
             virt_addr = filter + offset;
             *(volatile float*)virt_addr = A[i];
-            offset += 0x04;
+            offset += 0x08;
         }
         */
         //offset = 0x00;
         
-        #pragma omp parallel for
+        //#pragma omp parallel for
         for (j = 0; j < N; ++j)
         {
+             
+            start = clock();
              for (k = 0; k < K; ++k) {
                 tmpbox[ccnt] = B[k * ldb + j];
                 ccnt++;
              }
+            printf("%lf time cost \n",(float)(clock()-start)/CLOCKS_PER_SEC);
+            ccnt=0;
+            start = clock();
+             for (k = 0; k < K; ++k) {
+                tmpbox[ccnt] = B[k * ldb + j];
+                ccnt++;
+             }     
+            printf("%lf time cost \n",(float)(clock()-start)/CLOCKS_PER_SEC);
+            }
             if(ccnt==count)
             {
                 memcpy(input,tmpbox, 12288);
@@ -1866,16 +1862,14 @@ void gemm_nn(int M, int N, int K, float ALPHA,
                 //Enable Signal
                 read_mm(psum, c_len, c_offset, quantC);
                 
-                // For Zero Init deprecated
-                //if(j==pivot)
-                    //zero_init_mm(input);
+                if(j==pivot)
+                    zero_init_mm(input);
                 
                 memset(tmpbox,0,count*sizeof(float));
                 ccnt=0;
                 //offset = 0x00;
              }
         }
-
         tmp_c_len = N %(block*3/K);
         if(tmp_c_len != 0)
         {
@@ -1886,11 +1880,11 @@ void gemm_nn(int M, int N, int K, float ALPHA,
                 offset += 0x08;
             }
         }
-       
+         
         munmap(filter, MAP_SIZE);
         munmap(input, MAP_SIZE);
         close(fd); 
-
+    #endif
     /* uint8_t Quantized Gemm CPU Mode */
     
    #pragma omp parallel for
