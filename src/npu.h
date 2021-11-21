@@ -96,6 +96,17 @@ void quantize_8bits(float x[], float min, float max, int len) {
     // dequantize
 }
 
+float compare(const void *a, const void *b)   
+{
+    float num1 = *(int *)a;    
+    float num2 = *(int *)b;    
+    if (num1 < num2)   
+        return -1;     
+    if (num1 > num2)    
+        return 1;      
+    return 0;    
+}
+
 //float read_SFR(int fd, off_t target);
 //void write_SFR(int fd, off_t target, unsigned long value);
 /*
