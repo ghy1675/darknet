@@ -59,23 +59,6 @@ void zero_init_mm(void *memory)
     memcpy(memory, intbox, BLOCK_SIZE);
 }
 
-void read_mm(void *memory, int length, int c_offset, float *quantC)
-{
-    void* virt_addr;
-    
-    int l;
-    off_t offset=0x00;
-    float output;
-    
-    #pragma omp parallel for
-    for(l=0;l<length;l++)
-    {
-        virt_addr = memory + offset;
-        output = *((float*)virt_addr);
-        quantC[c_offset++] = output;
-        offset+=0x08;
-    }
-}
 
 void quantize_8bits(float x[], float min, float max, int len) {
     uint8_t temp[len]; 
@@ -84,11 +67,13 @@ void quantize_8bits(float x[], float min, float max, int len) {
     float scale = (max - min) / 255;
     uint8_t zero_point = 0 - round(min / scale);
     
+    #pragma omp parallel for
     for (i = 0; i < len; i++) 
     {
         temp[i] = (uint8_t)round(x[i] / scale) + zero_point;
     }
-
+    
+    #pragma omp parallel for
     for (i = 0; i < len; i++) 
     {
         x[i] = (temp[i] - zero_point) * scale;
@@ -106,6 +91,20 @@ float compare(const void *a, const void *b)
         return 1;      
     return 0;    
 }
+/*
+
+void read_mm(void *memory, int length, int c_offset, float *quantC)
+{
+    void* virt_addr;
+    
+    int l;
+    off_t offset=0x00;
+    float output;
+    
+    memcpy(quantC, memory, sizeof(int)*length);
+}
+*/
+
 
 //float read_SFR(int fd, off_t target);
 //void write_SFR(int fd, off_t target, unsigned long value);
