@@ -1754,37 +1754,24 @@ int is_fma_avx2() {
 void gemm_nn(int M, int N, int K, float ALPHA,
     float *A, int lda,
     float *B, int ldb,
-    float *C, int ldc, float *quantC, bool flag)
+    float *C, int ldc, float *quantC, bool flag,
+    int *fd,
+    void *input, void *filter, void *psum)
 {
     int i, j, k;
     int count = 0;
     int block = 24576;
-    int pos=0;
     int pivot;
     int ccnt=0;
-    int fd;
     
     int c_len;
 
     clock_t start;
     
     /* For Memory Access */
-    void *input;
-    void *filter;
-    void *psum;
     off_t offset=0x00;
-    
     void* virt_addr;
-    
-    /* For Quantization Parameters */
-    float fmin_x = 10000;
-    float fmax_x = 0;
-    float imin_x = 10000;
-    float imax_x = 0;
-    float omin_x = 10000;
-    float omax_x = 0;
-
-    
+   
     /* For MemBlock */
     #ifdef TEST
     count = (block)-((block)%K);// 12288 - 3 = 12285
@@ -1794,35 +1781,11 @@ void gemm_nn(int M, int N, int K, float ALPHA,
     pivot = pivot/K;
     #endif
     
-    /* Quantization Function*/
-    
-    #ifdef Quant
-    
-    //#pragma omp parallel for
-    /*
-    qsort(A,K,sizeof(float),compare);
-    qsort(B,N,sizeof(float),compare); // 신선임님 C의 결과로 가져오기로 함 Big Gemm 바꿔야함
-    
-    
-    quantize_8bits(A, fmin_x, fmax_x, K);
-    quantize_8bits(B, imin_x, imax_x, N); // 이건 내가
-    */ // go Big Gemm
-    #endif
-    
     // uint8_t Quantized Gemm NPU Mode
     //gettimeofday(&tv, NULL);
     //start = (tv.tv_sec) * 1000 + (tv.tv_usec) / 1000 ;
     #ifdef TEST
-    /*
-        fd = open("/dev/mem",O_RDWR|O_SYNC);
-        input = mmap(0, MAP_SIZE, PROT_WRITE | PROT_READ, MAP_SHARED, fd, MEM_BANK1);
-        filter = mmap(0, MAP_SIZE, PROT_WRITE | PROT_READ, MAP_SHARED, fd, MEM_BANK4);
-        psum = mmap(0, 65536, PROT_WRITE | PROT_READ, MAP_SHARED, fd, MEM_BANK7);
-        // Go to big gemm
     
-        //zero_init_mm(input);
-        //zero_init_mm(filter);
-        
         // A = Filter
         ccnt = 4-(K%4);
         memcpy(filter, A, sizeof(int)*(K-(K%4)));  
@@ -1845,7 +1808,7 @@ void gemm_nn(int M, int N, int K, float ALPHA,
                 memcpy(input, &B[k*ldb+j], sizeof(int)*block);
             }
             
-               // Enable Signal
+            // Enable Signal
             
             for(j=k*ldb+c_len*block;j<N;j++)
             {
@@ -1853,17 +1816,21 @@ void gemm_nn(int M, int N, int K, float ALPHA,
                 *(volatile float*)virt_addr = B[j];
                 offset += 0x04;
             }
+            offset = 0x00;
+            // Enable Signal
         }
         
+    /*
         munmap(filter, MAP_SIZE);
         munmap(input, MAP_SIZE);
-        close(fd); 
-    */   
+        close(fd);   
+    */
     #endif
-     
+    memcpy(quantC, psum, sizeof(int)*24576);
+    //read_mm(psum,24576,0x00,quantC);
     /* uint8_t Quantized Gemm CPU Mode */
-    
-   #pragma omp parallel for
+    /*
+    #pragma omp parallel for
     for (k = 0; k < K; ++k) 
     {
         register float A_PART = A[k];
@@ -1871,6 +1838,7 @@ void gemm_nn(int M, int N, int K, float ALPHA,
             C[j] += A_PART * B[k * ldb + j];
         }
     } 
+    */
     
 }
 
@@ -2541,59 +2509,47 @@ void gemm_cpu(int TA, int TB, int M, int N, int K, float ALPHA,
         float BETA,
         float *C, int ldc, float *quantC)
 {
-    //printf("cpu: %d %d %d \n",M, N, K);
     bool flag=true;
-    //int fd = open("/dev/mem",O_RDWR|O_SYNC);
-    struct timeval tv;
-    double start, end, total=0.0;
-    //float *quantC = (float*)xcalloc(N, sizeof(float));
-    float tmp;
-    off_t len;
+    int fd;
+    int t;
     
+    void *input;
+    void *filter;
+    void *psum;
     
-    if (BETA != 1){
-        int i, j;
-        for(i = 0; i < M; ++i){
-            for(j = 0; j < N; ++j){
-                C[i*ldc + j] *= BETA;
-            }
+    //quantize_8bits(A, fmin_x, fmax_x, K);
+    //quantize_8bits(B, imin_x, imax_x, N); 
+    
+    fd = open("/dev/mem",O_RDWR|O_SYNC);
+    input = mmap(0, MAP_SIZE, PROT_WRITE | PROT_READ, MAP_SHARED, fd, MEM_BANK1);
+    filter = mmap(0, MAP_SIZE, PROT_WRITE | PROT_READ, MAP_SHARED, fd, MEM_BANK4);
+    psum = mmap(0, 65536, PROT_WRITE | PROT_READ, MAP_SHARED, fd, MEM_BANK7);
+    
+   
+    
+    #pragma omp parallel for
+    for (t = 0; t < M; ++t) {
+        if (!TA && !TB)
+        {
+            gemm_nn(1, N, K, ALPHA, A + t*lda, lda, B, ldb, C + t*ldc, ldc, quantC, flag, fd, input, filter, psum);
+            
         }
+        else if (TA && !TB)
+            gemm_tn(1, N, K, ALPHA, A + t, lda, B, ldb, C + t*ldc, ldc);
+        else if (!TA && TB)
+            gemm_nt(1, N, K, ALPHA, A + t*lda, lda, B, ldb, C + t*ldc, ldc);
+        else
+            gemm_tt(1, N, K, ALPHA, A + t, lda, B, ldb, C + t*ldc, ldc);
+        flag = false;
     }
-
-    is_avx();   // initialize static variable
-    if (is_fma_avx2() && !TA && !TB) {
-        gemm_nn_fast(M, N, K, ALPHA, A, lda, B, ldb, C, ldc);
-    }
-    else {
-        int t;
-        //gettimeofday(&tv, NULL);
-        //start = (tv.tv_sec) * 1000 + (tv.tv_usec) / 1000 ;
-        #pragma omp parallel for
-        for (t = 0; t < M; ++t) {
-            if (!TA && !TB)
-                gemm_nn(1, N, K, ALPHA, A + t*lda, lda, B, ldb, C + t*ldc, ldc, quantC, flag);
-            else if (TA && !TB)
-                gemm_tn(1, N, K, ALPHA, A + t, lda, B, ldb, C + t*ldc, ldc);
-            else if (!TA && TB)
-                gemm_nt(1, N, K, ALPHA, A + t*lda, lda, B, ldb, C + t*ldc, ldc);
-            else
-                gemm_tt(1, N, K, ALPHA, A + t, lda, B, ldb, C + t*ldc, ldc);
-            flag = false;
-        }
-        /*
-        gettimeofday(&tv, NULL);
-        end = (tv.tv_sec) * 1000 + (tv.tv_usec) / 1000 ;
-        printf("== gemm cost %f\n", (end - start) / 1000);
-        */
-    }
+  
+    
+    close(fd);
     /* Compare */
-    //len = read_SFR1(fd, 0x400000000);
-    /*
-    for(int i =0;i<20;i++)
+    //for(int i =0;i<20;i++)
     {
-        printf("%lf %lf\n",C[i],quantC[i]);
+       // printf("%lf %lf\n",C[0],quantC[0]);
     }
-    */
     
 }
 
