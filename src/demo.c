@@ -304,7 +304,14 @@ void demo(char *cfgfile, char *weightfile, float thresh, float hier_thresh, int 
             if(!prefix){
                 if (!dont_show) {
                     const int each_frame = max_val_cmp(1, avg_fps / 60);
-                    if(global_frame_counter % each_frame == 0) show_image_mat(show_img, "Demo");
+                    if(global_frame_counter % each_frame == 0) 
+                    {
+                        char buff[256];
+                        sprintf(buff, "Inference_data.jpg");
+                        if(show_img) save_cv_jpg(show_img, buff);
+                        show_image_mat(show_img, "Demo");
+                        
+                    }
                     int c = wait_key_cv(1);
                     if (c == 10) {
                         if (frame_skip == 0) frame_skip = 60;
@@ -319,10 +326,13 @@ void demo(char *cfgfile, char *weightfile, float thresh, float hier_thresh, int 
                 }
             }else{
                 char buff[256];
-                sprintf(buff, "%s_%08d.jpg", prefix, count);
+                sprintf(buff, "%s.jpg", prefix, count);
                 if(show_img) save_cv_jpg(show_img, buff);
+                show_image_mat(show_img, "Demo");
             }
-
+            //char buff[256];
+            //sprintf(buff, "%s_%08d.jpg", prefix, count);
+            
             // if you run it with param -mjpeg_port 8090  then open URL in your web-browser: http://localhost:8090
             if (mjpeg_port > 0 && show_img) {
                 int port = mjpeg_port;
@@ -386,6 +396,7 @@ void demo(char *cfgfile, char *weightfile, float thresh, float hier_thresh, int 
                 start_time = get_time_point();
             }
         }
+        //save_cv_jpg(show_img, "Inference_data.jpg");
     }
     printf("input video stream closed. \n");
     if (output_video_writer) {
