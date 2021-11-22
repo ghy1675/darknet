@@ -27,37 +27,15 @@
 #define MEM_BANK7 0x400030000
 #define MEM_BANK8 0x400038000 // PSum
 
-//0x400040008 lsb = 1 = done BANK 7,8 Read
-#define lsb_read  0x400040008
-
-//
-// Length To Compare With CPU Calc
-#define add_dst_A   0x400040100
-//#define add_dst_B   0x400040200
-//#define add_dst_C   0x400040300 
-
-
 #define Gemm_En 1 // address
 #define MEM_RST 1 // address
 #define MEM_RD 1  // address
 
 // Memory R/W
-#define MAP_SIZE 98304UL 			// Memory Paging Size 4KB
+#define MAP_SIZE 98304UL 			// Memory Paging Size 24KB
 #define MAP_MASK (MAP_SIZE - 1) 	// Memory Address Mask
-#define MAXLINE 511 				// buf max
-#define COMMAND_ERROR "Unknown command!!"
 #define BLOCK_SIZE 24576
 
-int intbox[BLOCK_SIZE];
-float floatbox[BLOCK_SIZE];
-
-void zero_init_mm(void *memory)
-{
-    int i;
-    off_t offset=0x00;
-    void* virt_addr;
-    memcpy(memory, intbox, BLOCK_SIZE);
-}
 
 
 void quantize_8bits(float x[], float min, float max, int len) {
@@ -103,6 +81,15 @@ void read_mm(void *memory, int length, int c_offset, float *quantC)
     
     memcpy(quantC, memory, sizeof(int)*length);
 }
+
+void zero_init_mm(void *memory)
+{
+    int i;
+    off_t offset=0x00;
+    void* virt_addr;
+    memcpy(memory, intbox, BLOCK_SIZE);
+}
+
 */
 
 
