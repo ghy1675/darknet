@@ -15,6 +15,12 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <time.h> 
+// for REST API
+#include <curl.h>
+
+CURLcode request(CURL *hCURL, FILE *image_fd);
+CURL* curl_init();
+void curl_end(CURL *hCURL);
 
 #define MEM_BANK1 0x400000000
 #define MEM_BANK2 0x400008000
