@@ -1758,12 +1758,9 @@ void gemm_nn(int M, int N, int K, float ALPHA,
     int *fd,
     void *input, void *filter, void *psum)
 {
-    int i, j, k;
-    int count = 0;
+    int j, k;
     int block = 24576;
-    int pivot;
     int ccnt=0;
-    
     int c_len;
 
     clock_t start;
@@ -1771,63 +1768,44 @@ void gemm_nn(int M, int N, int K, float ALPHA,
     /* For Memory Access */
     off_t offset=0x00;
     void* virt_addr;
-   
-    /* For MemBlock */
-    #ifdef TEST
-    count = (block)-((block)%K);// 12288 - 3 = 12285
-    
-    c_len = block/K; // 12288 / 27 = 455
-    pivot = (N*K)-(((N*K)/count)*count);
-    pivot = pivot/K;
-    #endif
-    
+
     // uint8_t Quantized Gemm NPU Mode
-    //gettimeofday(&tv, NULL);
-    //start = (tv.tv_sec) * 1000 + (tv.tv_usec) / 1000 ;
-    #ifdef TEST
+    // A = Filter
+    ccnt = 4-(K%4);
+    c_len = N/block;
+    memcpy(filter, A, sizeof(int)*(K-(K%4)));  
+
+    #pragma omp parallel for
+    for(j=K-ccnt;j<K;j++)
+    {
+        virt_addr = filter + offset;
+        *(volatile float*)virt_addr = A[j];
+        offset += 0x04;
+    }
+    offset = 0x00;
     
-        // A = Filter
-        ccnt = 4-(K%4);
-        memcpy(filter, A, sizeof(int)*(K-(K%4)));  
-        
-        #pragma omp parallel for
-        for(i=K-ccnt;i<K;i++)
+    // B = Input   
+    #pragma omp parallel for
+    for (k = 0; k < K; k++) 
+    {
+        for (j = 0; j < c_len; j++) memcpy(input, &B[k*ldb+j], sizeof(int)*block);
+
+        // Enable Signal
+
+        for(j=k*ldb+c_len*block;j<N;j++)
         {
-            virt_addr = filter + offset;
-            *(volatile float*)virt_addr = A[i];
+            virt_addr = input + offset;
+            *(volatile float*)virt_addr = B[j];
             offset += 0x04;
         }
-        
         offset = 0x00;
-        // B = Input   
-        c_len = N/block;
-        #pragma omp parallel for
-        for (k = 0; k < K; k++) 
-        {
-            for (j = 0; j < c_len; j++) {
-                memcpy(input, &B[k*ldb+j], sizeof(int)*block);
-            }
-            
-            // Enable Signal
-            
-            for(j=k*ldb+c_len*block;j<N;j++)
-            {
-                virt_addr = input + offset;
-                *(volatile float*)virt_addr = B[j];
-                offset += 0x04;
-            }
-            offset = 0x00;
-            // Enable Signal
-        }
         
-    /*
-        munmap(filter, MAP_SIZE);
-        munmap(input, MAP_SIZE);
-        close(fd);   
-    */
-    #endif
+        // Enable Signal
+        
+    }
+    
     memcpy(quantC, psum, sizeof(int)*24576);
-    //read_mm(psum,24576,0x00,quantC);
+
     /* uint8_t Quantized Gemm CPU Mode */
     /*
     #pragma omp parallel for
@@ -2502,6 +2480,16 @@ void gemm_tt(int M, int N, int K, float ALPHA,
     }
 }
 
+void gemm_nn_KETI(int M, int N, int K, float ALPHA,
+    float *A, int lda,
+    float *B, int ldb,
+    float *C, int ldc, float *quantC, bool flag,
+    int *fd,
+    void *input, void *filter, void *psum)
+{
+    
+}
+
 
 void gemm_cpu(int TA, int TB, int M, int N, int K, float ALPHA,
         float *A, int lda,
@@ -2524,33 +2512,21 @@ void gemm_cpu(int TA, int TB, int M, int N, int K, float ALPHA,
     input = mmap(0, MAP_SIZE, PROT_WRITE | PROT_READ, MAP_SHARED, fd, MEM_BANK1);
     filter = mmap(0, MAP_SIZE, PROT_WRITE | PROT_READ, MAP_SHARED, fd, MEM_BANK4);
     psum = mmap(0, 65536, PROT_WRITE | PROT_READ, MAP_SHARED, fd, MEM_BANK7);
-    
-   
-    
+      
     #pragma omp parallel for
-    for (t = 0; t < M; ++t) {
-        if (!TA && !TB)
-        {
-            gemm_nn(1, N, K, ALPHA, A + t*lda, lda, B, ldb, C + t*ldc, ldc, quantC, flag, fd, input, filter, psum);
-            
-        }
-        else if (TA && !TB)
-            gemm_tn(1, N, K, ALPHA, A + t, lda, B, ldb, C + t*ldc, ldc);
-        else if (!TA && TB)
-            gemm_nt(1, N, K, ALPHA, A + t*lda, lda, B, ldb, C + t*ldc, ldc);
-        else
-            gemm_tt(1, N, K, ALPHA, A + t, lda, B, ldb, C + t*ldc, ldc);
-        flag = false;
+    for (t = 0; t < M; t++) {
+        gemm_nn(1, N, K, ALPHA, A + t*lda, lda, B, ldb, C + t*ldc, ldc, quantC, flag, fd, input, filter, psum);
+        /*
+        gemm_nn(1, N, K, ALPHA, A + (t+1)*lda, lda, B, ldb, C + (t+1)*ldc, ldc, quantC, flag, fd, input, filter, psum);
+        gemm_nn(1, N, K, ALPHA, A + (t+2)*lda, lda, B, ldb, C + (t+2)*ldc, ldc, quantC, flag, fd, input, filter, psum);
+        gemm_nn(1, N, K, ALPHA, A + (t+3)*lda, lda, B, ldb, C + (t+3)*ldc, ldc, quantC, flag, fd, input, filter, psum);
+        gemm_nn(1, N, K, ALPHA, A + (t+4)*lda, lda, B, ldb, C + (t+4)*ldc, ldc, quantC, flag, fd, input, filter, psum);
+        gemm_nn(1, N, K, ALPHA, A + (t+5)*lda, lda, B, ldb, C + (t+5)*ldc, ldc, quantC, flag, fd, input, filter, psum);
+        gemm_nn(1, N, K, ALPHA, A + (t+6)*lda, lda, B, ldb, C + (t+6)*ldc, ldc, quantC, flag, fd, input, filter, psum);
+        gemm_nn(1, N, K, ALPHA, A + (t+7)*lda, lda, B, ldb, C + (t+7)*ldc, ldc, quantC, flag, fd, input, filter, psum);
+        */
     }
-  
-    
     close(fd);
-    /* Compare */
-    //for(int i =0;i<20;i++)
-    {
-       // printf("%lf %lf\n",C[0],quantC[0]);
-    }
-    
 }
 
 #ifdef GPU

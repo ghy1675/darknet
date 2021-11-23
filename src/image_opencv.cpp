@@ -481,6 +481,7 @@ extern "C" void show_image_mat(mat_cv *mat_ptr, const char *name)
         cv::Mat &mat = *(cv::Mat *)mat_ptr;
         cv::namedWindow(name, cv::WINDOW_NORMAL);
         cv::imshow(name, mat);
+        //cv::imwrite("Inference_data.jpg",mat);
     }
     catch (...) {
         cerr << "OpenCV exception: show_image_mat \n";
@@ -878,6 +879,7 @@ extern "C" void save_cv_jpg(mat_cv *img_src, const char *name)
 extern "C" void draw_detections_cv_v3(mat_cv* mat, detection *dets, int num, float thresh, char **names, image **alphabet, int classes, int ext_output)
 {
     try {
+        //cv::imwrite("inference_data.jpg",&mat);
         cv::Mat *show_img = (cv::Mat*)mat;
         int i, j;
         if (!show_img) return;
