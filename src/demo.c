@@ -8,6 +8,7 @@
 #include "image.h"
 #include "demo.h"
 #include "darknet.h"
+#include "restapi_client.h"
 #ifdef WIN32
 #include <time.h>
 #include "gettimeofday.h"
@@ -154,6 +155,10 @@ void demo(char *cfgfile, char *weightfile, float thresh, float hier_thresh, int 
     demo_thresh = thresh;
     demo_ext_output = ext_output;
     demo_json_port = json_port;
+    CURL* hCURL = NULL;
+    hCURL = curl_init();
+    char buff[256];
+    sprintf(buff, "Inference_data.jpg");
     printf("Demo\n");
     
     net = parse_network_cfg_custom(cfgfile, 1, 1);    // set batch=1
@@ -306,9 +311,14 @@ void demo(char *cfgfile, char *weightfile, float thresh, float hier_thresh, int 
                     const int each_frame = max_val_cmp(1, avg_fps / 60);
                     if(global_frame_counter % each_frame == 0) 
                     {
-                        char buff[256];
-                        sprintf(buff, "Inference_data.jpg");
-                        if(show_img) save_cv_jpg(show_img, buff);
+                        
+                        //if(show_img) 
+                        if(show_img) 
+                        {
+                            sprintf(buff, "./inference_data/Inference_data_%d.jpg", count);
+                            save_cv_jpg(show_img, buff);
+                            request(hCURL, buff);
+                        }
                         show_image_mat(show_img, "Demo");
                         
                     }
@@ -398,6 +408,7 @@ void demo(char *cfgfile, char *weightfile, float thresh, float hier_thresh, int 
         }
         //save_cv_jpg(show_img, "Inference_data.jpg");
     }
+    //curl_end(hCURL);
     printf("input video stream closed. \n");
     if (output_video_writer) {
         release_video_writer(&output_video_writer);
@@ -430,6 +441,7 @@ void demo(char *cfgfile, char *weightfile, float thresh, float hier_thresh, int 
     }
     free(alphabet);
     free_network(net);
+   
     //cudaProfilerStop();
 }
 #else
