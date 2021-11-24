@@ -226,7 +226,8 @@ void demo(char *cfgfile, char *weightfile, float thresh, float hier_thresh, int 
     int count = 0;
     if(!prefix && !dont_show){
         int full_screen = 0;
-        create_window_cv("Demo", full_screen, 1352, 1013);
+        //create_window_cv("Demo", full_screen, 1352, 1013);
+        create_window_cv("Demo", full_screen, 640, 480);
     }
 
 
@@ -335,8 +336,8 @@ void demo(char *cfgfile, char *weightfile, float thresh, float hier_thresh, int 
                     }
                 }
             }else{
-                char buff[256];
-                sprintf(buff, "%s.jpg", prefix, count);
+                //char buff[256];
+                sprintf(buff, "%s%d.jpg", prefix, count);
                 if(show_img) save_cv_jpg(show_img, buff);
                 show_image_mat(show_img, "Demo");
             }
