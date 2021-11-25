@@ -1240,7 +1240,12 @@ void forward_convolutional_layer(convolutional_layer l, network_state state) //k
             float *a = l.weights +j*l.nweights / l.groups;
             float *b = state.workspace;
             float *c = l.output +(i*l.groups + j)*n*m;
+            
+            // For NPU 
+            //uint8_t *quantA = l.weights +j*l.nweights / l.groups;
+            //uint8_t *quantB = state.workspace;
             float *quantC = l.output +(i*l.groups + j)*n*m;
+            
             //gemm(0,0,m,n,k,1,a,k,b,n,1,c,n);
             //gemm_nn_custom(m, n, k, 1, a, k, b, n, c, n);
             if (l.xnor && l.align_bit_weights && !state.train && l.stride_x == l.stride_y)
@@ -1385,17 +1390,9 @@ void forward_convolutional_layer(convolutional_layer l, network_state state) //k
                         b);                 // output
                    
                 }
-               // start = clock();
-                //gettimeofday(&tv, NULL);
-                //start = (tv.tv_sec) * 1000 + (tv.tv_usec) / 1000 ;
+                
                 gemm(0, 0, m, n, k, 1, a, k, b, n, 1, c, n, quantC);
-                //end = clock();
-                //gettimeofday(&tv, NULL);
-                //end = (tv.tv_sec) * 1000 + (tv.tv_usec) / 1000 ;
-                //printf("== gemm cost %.4f sec\n", (float)(end-start)/CLOCKS_PER_SEC);
-                //printf("== gemm cost %f\n", (end - start) / 1000);
-                //total = total + ((end - start) / 1000);
-                //printf("total : %lf\n", total);
+                
                 //gemm(0, 0, m, n, k, 1, a, k, b, n, 1, c, n);
                 // bit-count to float
             }

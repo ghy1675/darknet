@@ -2487,6 +2487,20 @@ void gemm_nn_KETI(int M, int N, int K, float ALPHA,
     int *fd,
     void *input, void *filter, void *psum)
 {
+    int t;
+    
+    float fmin_x=0;
+    float fmax_x=255;
+    float imin_x=0;
+    float imax_x=255;
+
+    //quantize_8bits(A, fmin_x, fmax_x, K*M); // input
+    //quantize_8bits(B, imin_x, imax_x, N*K); // filter
+    
+    fd = open("/dev/mem",O_RDWR|O_SYNC);
+    input = mmap(0, MAP_SIZE, PROT_WRITE | PROT_READ, MAP_SHARED, fd, MEM_BANK1);
+    filter = mmap(0, MAP_SIZE, PROT_WRITE | PROT_READ, MAP_SHARED, fd, MEM_BANK4);
+    psum = mmap(0, 65536, PROT_WRITE | PROT_READ, MAP_SHARED, fd, MEM_BANK7);
     
 }
 
@@ -2516,17 +2530,12 @@ void gemm_cpu(int TA, int TB, int M, int N, int K, float ALPHA,
     #pragma omp parallel for
     for (t = 0; t < M; t++) {
         gemm_nn(1, N, K, ALPHA, A + t*lda, lda, B, ldb, C + t*ldc, ldc, quantC, flag, fd, input, filter, psum);
-        /*
-        gemm_nn(1, N, K, ALPHA, A + (t+1)*lda, lda, B, ldb, C + (t+1)*ldc, ldc, quantC, flag, fd, input, filter, psum);
-        gemm_nn(1, N, K, ALPHA, A + (t+2)*lda, lda, B, ldb, C + (t+2)*ldc, ldc, quantC, flag, fd, input, filter, psum);
-        gemm_nn(1, N, K, ALPHA, A + (t+3)*lda, lda, B, ldb, C + (t+3)*ldc, ldc, quantC, flag, fd, input, filter, psum);
-        gemm_nn(1, N, K, ALPHA, A + (t+4)*lda, lda, B, ldb, C + (t+4)*ldc, ldc, quantC, flag, fd, input, filter, psum);
-        gemm_nn(1, N, K, ALPHA, A + (t+5)*lda, lda, B, ldb, C + (t+5)*ldc, ldc, quantC, flag, fd, input, filter, psum);
-        gemm_nn(1, N, K, ALPHA, A + (t+6)*lda, lda, B, ldb, C + (t+6)*ldc, ldc, quantC, flag, fd, input, filter, psum);
-        gemm_nn(1, N, K, ALPHA, A + (t+7)*lda, lda, B, ldb, C + (t+7)*ldc, ldc, quantC, flag, fd, input, filter, psum);
-        */
     }
+    munmap(input, MAP_SIZE);
+    munmap(filter, MAP_SIZE);
+    munmap(psum, 65536);
     close(fd);
+    
 }
 
 #ifdef GPU
