@@ -21,7 +21,7 @@
 
 /* For NPU */
 #include <stdbool.h>
-//#include "npu.h"
+#include "npu.h"
 #include <time.h>
 #include <stdlib.h>
 
@@ -2504,10 +2504,12 @@ void gemm_cpu(int M, int N, int K, float ALPHA,
     float fmax_x=255;
     float imin_x=0;
     float imax_x=255;
+    printf("%f : ",A[0]);
+    quantize_8bits(A, fmin_x, fmax_x, K*M, quantA); // input
     /*
     //quantize_8bits(float input[], float min, float max, int len, uint8_t output)
-    //quantize_8bits(A, fmin_x, fmax_x, K*M); // input
-    //quantize_8bits(B, imin_x, imax_x, N*K); // filter
+    //
+    //quantize_8bits(B, imin_x, imax_x, N*K, quantB); // filter
     
     //fd = open("/dev/mem",O_RDWR|O_SYNC);
     //input = mmap(0, MAP_SIZE, PROT_WRITE | PROT_READ, MAP_SHARED, fd, MEM_BANK1);
@@ -2545,32 +2547,10 @@ void gemm_cpu(int TA, int TB, int M, int N, int K, float ALPHA,
     void *psum;
     //printf("CPUCPUCPUCPUCPUCPUCPUCPUCPUCPUCPU\n");
     
-    // TBD 
-    /*
-    quantize_8bits(A, fmin_x, fmax_x, K*M, quantA);
-    quantize_8bits(B, imin_x, imax_x, N*K, quantB); 
-    
-    fd = open("/dev/mem",O_RDWR|O_SYNC);
-    input = mmap(0, MAP_SIZE, PROT_WRITE | PROT_READ, MAP_SHARED, fd, MEM_BANK1);
-    filter = mmap(0, MAP_SIZE, PROT_WRITE | PROT_READ, MAP_SHARED, fd, MEM_BANK4);
-    psum = mmap(0, 65536, PROT_WRITE | PROT_READ, MAP_SHARED, fd, MEM_BANK7);
-    */  
     #pragma omp parallel for
     for (t = 0; t < M; t++) {
-        gemm_nn(1, N, K, ALPHA, A + t*lda, lda, B, ldb, C + t*ldc, ldc);//, fd, input, filter, psum);
-        //gemm_nn(1, N, K, ALPHA, quantA + t*lda, lda, quantB, ldb, quantC + t*ldc, ldc, fd, input, filter, psum);
+        gemm_nn(1, N, K, ALPHA, A + t*lda, lda, B, ldb, C + t*ldc, ldc);
     }
-    
-    // TBD
-    /*
-    dequantize_8bits(C, 0.01, 100, N*M, quantC);
-    
-    munmap(input, MAP_SIZE);
-    munmap(filter, MAP_SIZE);
-    munmap(psum, 65536);
-    close(fd);
-    */
-    
 }
 #endif
 
