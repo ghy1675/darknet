@@ -8,6 +8,15 @@
 #include "box.h"
 #include <stdio.h>
 #include <time.h>
+#include "darknet.h"
+/*
+#define NPU_GEMM
+#if OPMODE == 0 
+#undef NPU_GEMM 
+#endif
+*/
+//#include "npu.h"
+
 
 #ifdef AI2
 #include "xnor_layer.h"
@@ -1241,9 +1250,9 @@ void forward_convolutional_layer(convolutional_layer l, network_state state) //k
             float *b = state.workspace;
             float *c = l.output +(i*l.groups + j)*n*m;
             
-            // For NPU 
-            //uint8_t *quantA = l.weights +j*l.nweights / l.groups;
-            //uint8_t *quantB = state.workspace;
+            // TBD
+            uint8_t *quantA = l.weights +j*l.nweights / l.groups;
+            uint8_t *quantB = state.workspace;
             float *quantC = l.output +(i*l.groups + j)*n*m;
             
             //gemm(0,0,m,n,k,1,a,k,b,n,1,c,n);
@@ -1390,9 +1399,12 @@ void forward_convolutional_layer(convolutional_layer l, network_state state) //k
                         b);                 // output
                    
                 }
-                
-                gemm(0, 0, m, n, k, 1, a, k, b, n, 1, c, n, quantC);
-                
+                #ifdef NPU_GEMM
+                gemm(0, 0, m, n, k, 1, a, k, b, n, 1, c, n, quantA, quantB, quantC);
+                #endif
+                #ifndef NPU_GEMM
+                gemm(0, 0, m, n, k, 1, a, k, b, n, 1, c, n);
+                #endif
                 //gemm(0, 0, m, n, k, 1, a, k, b, n, 1, c, n);
                 // bit-count to float
             }

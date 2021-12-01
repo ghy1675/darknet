@@ -18,12 +18,12 @@
 #include <ctype.h>
 #include <errno.h>
 #include <memory.h>
+
 /* For NPU */
 #include <stdbool.h>
-#include "npu.h"
+//#include "npu.h"
 #include <time.h>
 #include <stdlib.h>
-
 
 #ifdef _WIN32
 #include <intrin.h>
@@ -39,10 +39,6 @@
 #else
 #define PUT_IN_REGISTER register
 #endif
-
-
-#define TEST 1
-#define Quant 1
 
 #define min(a,b) a<b?a:b;
 #define max(a,b) a<b?b:a;
@@ -103,17 +99,26 @@ void time_random_matrix(int TA, int TB, int m, int k, int n)
     free(c);
 }
 
-
+#ifdef NPU_GEMM
 void gemm(int TA, int TB, int M, int N, int K, float ALPHA,
         float *A, int lda,
         float *B, int ldb,
         float BETA,
         float *C, int ldc,
-        float *quantC)
+        uint8_t *quantA, uint8_t *quantB, float *quantC)
 {
-    gemm_cpu( TA,  TB,  M, N, K, ALPHA,A,lda, B, ldb,BETA,C,ldc, quantC);
+    gemm_cpu(M, N, K, ALPHA, A, lda, B, ldb, C, ldc, quantA, quantB, quantC);
 }
-
+#else
+void gemm(int TA, int TB, int M, int N, int K, float ALPHA,
+        float *A, int lda,
+        float *B, int ldb,
+        float BETA,
+        float *C, int ldc)
+{
+    gemm_cpu( TA,  TB,  M, N, K, ALPHA,A,lda, B, ldb,BETA,C,ldc);
+}
+#endif
 
 //--------------------------------------------
 // XNOR bitwise GEMM for binary neural network
@@ -1750,13 +1755,19 @@ int is_avx() {
 int is_fma_avx2() { 
     return 0;
 }
+//gemm_nn(1, N, K, ALPHA, A + t*lda, lda, B, ldb, C + t*ldc, ldc, fd, input, filter, psum);
+#ifdef NPU_GEMM
+void gemm_nn()
+{
     
+}
+
+// gemm_nn(1, N, K, ALPHA, A + t*lda, lda, B, ldb, C + t*ldc, ldc, fd, input, filter, psum);   
+#else
 void gemm_nn(int M, int N, int K, float ALPHA,
     float *A, int lda,
     float *B, int ldb,
-    float *C, int ldc, float *quantC, bool flag,
-    int *fd,
-    void *input, void *filter, void *psum)
+    float *C, int ldc)
 {
     int j, k;
     int block = 24576;
@@ -1771,6 +1782,7 @@ void gemm_nn(int M, int N, int K, float ALPHA,
 
     // uint8_t Quantized Gemm NPU Mode
     // A = Filter
+    /*
     ccnt = 4-(K%4);
     c_len = N/block;
     memcpy(filter, A, sizeof(int)*(K-(K%4)));  
@@ -1805,9 +1817,9 @@ void gemm_nn(int M, int N, int K, float ALPHA,
     }
     
     memcpy(quantC, psum, sizeof(int)*24576);
-
+    */
     /* uint8_t Quantized Gemm CPU Mode */
-    /*
+    
     #pragma omp parallel for
     for (k = 0; k < K; ++k) 
     {
@@ -1816,9 +1828,8 @@ void gemm_nn(int M, int N, int K, float ALPHA,
             C[j] += A_PART * B[k * ldb + j];
         }
     } 
-    */
-    
 }
+#endif
 
 void gemm_nn_fast(int M, int N, int K, float ALPHA,
     float *A, int lda,
@@ -2480,63 +2491,89 @@ void gemm_tt(int M, int N, int K, float ALPHA,
     }
 }
 
-void gemm_nn_KETI(int M, int N, int K, float ALPHA,
+#ifdef NPU_GEMM
+void gemm_cpu(int M, int N, int K, float ALPHA,
     float *A, int lda,
     float *B, int ldb,
-    float *C, int ldc, float *quantC, bool flag,
-    int *fd,
-    void *input, void *filter, void *psum)
+    float *C, int ldc,
+    uint8_t *quantA, uint8_t *quantB, float *quantC)
 {
-    int t;
+    int t,k,j;
     
     float fmin_x=0;
     float fmax_x=255;
     float imin_x=0;
     float imax_x=255;
-
+    /*
+    //quantize_8bits(float input[], float min, float max, int len, uint8_t output)
     //quantize_8bits(A, fmin_x, fmax_x, K*M); // input
     //quantize_8bits(B, imin_x, imax_x, N*K); // filter
     
-    fd = open("/dev/mem",O_RDWR|O_SYNC);
-    input = mmap(0, MAP_SIZE, PROT_WRITE | PROT_READ, MAP_SHARED, fd, MEM_BANK1);
-    filter = mmap(0, MAP_SIZE, PROT_WRITE | PROT_READ, MAP_SHARED, fd, MEM_BANK4);
-    psum = mmap(0, 65536, PROT_WRITE | PROT_READ, MAP_SHARED, fd, MEM_BANK7);
+    //fd = open("/dev/mem",O_RDWR|O_SYNC);
+    //input = mmap(0, MAP_SIZE, PROT_WRITE | PROT_READ, MAP_SHARED, fd, MEM_BANK1);
+    //filter = mmap(0, MAP_SIZE, PROT_WRITE | PROT_READ, MAP_SHARED, fd, MEM_BANK4);
+    //psum = mmap(0, 65536, PROT_WRITE | PROT_READ, MAP_SHARED, fd, MEM_BANK7);
+    */
     
+    //printf("GEMMCPUGEMMMEMEMEMEMEME\n");
+    
+    #pragma omp parallel for
+    for (t = 0; t < M; t++) 
+    {
+        for(k=0;k<K;k++)
+        {
+            register float A_PART = A[k+t*lda];
+            for(j=0;j<N;j++)
+            {
+                C[j+t*ldc] += A_PART * B[k * ldb + j];
+            }
+        }
+    }
 }
-
-
+#else
 void gemm_cpu(int TA, int TB, int M, int N, int K, float ALPHA,
         float *A, int lda,
         float *B, int ldb,
         float BETA,
-        float *C, int ldc, float *quantC)
+        float *C, int ldc)
 {
-    bool flag=true;
     int fd;
     int t;
     
     void *input;
     void *filter;
     void *psum;
+    //printf("CPUCPUCPUCPUCPUCPUCPUCPUCPUCPUCPU\n");
     
-    //quantize_8bits(A, fmin_x, fmax_x, K);
-    //quantize_8bits(B, imin_x, imax_x, N); 
+    // TBD 
+    /*
+    quantize_8bits(A, fmin_x, fmax_x, K*M, quantA);
+    quantize_8bits(B, imin_x, imax_x, N*K, quantB); 
     
     fd = open("/dev/mem",O_RDWR|O_SYNC);
     input = mmap(0, MAP_SIZE, PROT_WRITE | PROT_READ, MAP_SHARED, fd, MEM_BANK1);
     filter = mmap(0, MAP_SIZE, PROT_WRITE | PROT_READ, MAP_SHARED, fd, MEM_BANK4);
     psum = mmap(0, 65536, PROT_WRITE | PROT_READ, MAP_SHARED, fd, MEM_BANK7);
-      
+    */  
     #pragma omp parallel for
     for (t = 0; t < M; t++) {
-        gemm_nn(1, N, K, ALPHA, A + t*lda, lda, B, ldb, C + t*ldc, ldc, quantC, flag, fd, input, filter, psum);
+        gemm_nn(1, N, K, ALPHA, A + t*lda, lda, B, ldb, C + t*ldc, ldc);//, fd, input, filter, psum);
+        //gemm_nn(1, N, K, ALPHA, quantA + t*lda, lda, quantB, ldb, quantC + t*ldc, ldc, fd, input, filter, psum);
     }
+    
+    // TBD
+    /*
+    dequantize_8bits(C, 0.01, 100, N*M, quantC);
+    
     munmap(input, MAP_SIZE);
     munmap(filter, MAP_SIZE);
     munmap(psum, 65536);
     close(fd);
+    */
     
 }
+#endif
+
 
 #ifdef GPU
 

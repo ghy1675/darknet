@@ -9,6 +9,12 @@
 #include "demo.h"
 #include "option_list.h"
 
+//#define NPU_GEMM
+/*
+#if OPMODE == 0 
+#undef NPU_GEMM 
+#endif
+*/
 #ifndef __COMPAR_FN_T
 #define __COMPAR_FN_T
 typedef int (*__compar_fn_t)(const void*, const void*);
@@ -1612,6 +1618,12 @@ void test_detector(char *datacfg, char *cfgfile, char *weightfile, char *filenam
             name_list, names_size, net.layers[net.n - 1].classes, cfgfile);
         if (net.layers[net.n - 1].classes > names_size) getchar();
     }
+    #ifdef NPU_GEMM
+    printf("NPU GEMM\n");
+    #endif
+    #ifndef NPU_GEMM
+    printf("CPU GEMM\n");
+    #endif
     srand(2222222);
     char buff[256];
     char *input = buff;

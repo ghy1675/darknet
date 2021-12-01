@@ -33,6 +33,15 @@
 #endif
 
 #define SECRET_NUM -1234
+/*
+    OPMODE 0 -> CPU
+    OPMODE 1 -> NPU
+*/
+#define NPU_GEMM
+#define OPMODE 1
+#if OPMODE == 0 
+#undef NPU_GEMM 
+#endif
 
 typedef enum { UNUSED_DEF_VAL } UNUSED_ENUM_TYPE;
 

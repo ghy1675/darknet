@@ -36,9 +36,21 @@
 #define MAP_MASK (MAP_SIZE - 1) 	// Memory Address Mask
 #define BLOCK_SIZE 24576
 
+void quantize_8bits(float input[], float min, float max, int len, uint8_t output[]) {
+    
+    int i;
+    float scale = (max - min) / 255;
+    uint8_t zero_point = 0 - round(min / scale);
+    
+    #pragma omp parallel for
+    for (i = 0; i < len; i++) 
+    {
+        output[i] = (uint8_t)round(input[i] / scale) + zero_point;
+    }
+    
+}
 
-
-void quantize_8bits(float x[], float min, float max, int len) {
+void dequantize_8bits(float x[], float min, float max, int len) {
     uint8_t temp[len]; 
     
     int i;

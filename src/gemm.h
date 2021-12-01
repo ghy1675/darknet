@@ -1,6 +1,9 @@
 #ifndef GEMM_H
 #define GEMM_H
+
+#include "darknet.h"
 #include "activations.h"
+
 #include <stdint.h>
 #include <stddef.h>
 #ifdef __cplusplus
@@ -87,21 +90,34 @@ void gemm_nn_bin_transposed_32bit_packed(int M, int N, int K, float ALPHA,
 void forward_maxpool_layer_avx(float *src, float *dst, int *indexes, int size, int w, int h, int out_w, int out_h, int c,
     int pad, int stride, int batch);
 
-
+#ifdef NPU_GEMM
 void gemm(int TA, int TB, int M, int N, int K, float ALPHA,
-                    float *A, int lda,
-                    float *B, int ldb,
-                    float BETA,
-                    float *C, int ldc,
-                    float *quantC);
-
-void gemm_cpu(int TA, int TB, int M, int N, int K, float ALPHA,
         float *A, int lda,
         float *B, int ldb,
         float BETA,
         float *C, int ldc,
-        float *quantC);
-
+        uint8_t *quantA, uint8_t *quantB, float *quantC);
+    
+void gemm_cpu(int M, int N, int K, float ALPHA,
+    float *A, int lda,
+    float *B, int ldb,
+    float *C, int ldc,
+    uint8_t *quantA, uint8_t *quantB, float *quantC);
+    
+#else    
+void gemm(int TA, int TB, int M, int N, int K, float ALPHA,
+                    float *A, int lda,
+                    float *B, int ldb,
+                    float BETA,
+                    float *C, int ldc);
+    
+void gemm_cpu(int TA, int TB, int M, int N, int K, float ALPHA,
+        float *A, int lda,
+        float *B, int ldb,
+        float BETA,
+        float *C, int ldc);  
+#endif
+    
 #ifdef GPU
 void gemm_ongpu(int TA, int TB, int M, int N, int K, float ALPHA,
         float *A_gpu, int lda,

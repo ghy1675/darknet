@@ -227,7 +227,8 @@ void demo(char *cfgfile, char *weightfile, float thresh, float hier_thresh, int 
     if(!prefix && !dont_show){
         int full_screen = 0;
         //create_window_cv("Demo", full_screen, 1352, 1013);
-        create_window_cv("Demo", full_screen, 640, 480);
+        //create_window_cv("Demo", full_screen, 640, 480);
+        create_window_cv("Demo", full_screen, 1920,1080);
     }
 
 
@@ -312,7 +313,7 @@ void demo(char *cfgfile, char *weightfile, float thresh, float hier_thresh, int 
                     const int each_frame = max_val_cmp(1, avg_fps / 60);
                     if(global_frame_counter % each_frame == 0) 
                     {
-                        
+                        #ifdef SERVER_IMAGE
                         //if(show_img) 
                         if(show_img) 
                         {
@@ -320,6 +321,7 @@ void demo(char *cfgfile, char *weightfile, float thresh, float hier_thresh, int 
                             save_cv_jpg(show_img, buff);
                             request(hCURL, buff);
                         }
+                        #endif
                         show_image_mat(show_img, "Demo");
                         
                     }

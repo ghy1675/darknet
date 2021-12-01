@@ -1,0 +1,1 @@
+./darknet_KETI detector demo cfg/coco.data cfg/yolov2-tiny.cfg yolov2-tiny.weights -c 0
