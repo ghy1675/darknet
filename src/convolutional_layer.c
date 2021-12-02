@@ -1251,10 +1251,10 @@ void forward_convolutional_layer(convolutional_layer l, network_state state) //k
             float *c = l.output +(i*l.groups + j)*n*m;
             
             // TBD
-            uint8_t *quantA = l.weights +j*l.nweights / l.groups;
-            uint8_t *quantB = state.workspace;
-            float *quantC = l.output +(i*l.groups + j)*n*m;
-            
+            uint8_t *quantA = malloc(sizeof(uint8_t)*k*m);
+            uint8_t *quantB = malloc(sizeof(uint8_t)*k*n);
+            float *quantC = malloc(sizeof(uint8_t)*m*n);
+
             //gemm(0,0,m,n,k,1,a,k,b,n,1,c,n);
             //gemm_nn_custom(m, n, k, 1, a, k, b, n, c, n);
             if (l.xnor && l.align_bit_weights && !state.train && l.stride_x == l.stride_y)

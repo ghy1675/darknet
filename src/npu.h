@@ -43,20 +43,22 @@ struct buffer{
 void quantize_8bits(float *input, float min, float max, int len, uint8_t *output) {
     
     int i;
-    float scale = (max - min) / 255;
-    uint8_t zero_point = 0 - round(min / scale);
-    printf("%f : ",input[0]);
+    register float scale = (max - min) / 255;
+    register uint8_t zero_point = 0 - round(min / scale);
     
+    //printf("%f %f",min, max);
+    //printf(" : %f %d\n",scale, zero_point);
+    //printf("%f ",input[num]);
     #pragma omp parallel for
     for (i = 0; i < len; i++) 
     {
         output[i] = (uint8_t)round(input[i] / scale) + zero_point;
-        //Quantize Error Fix Plz.............
     }
-    printf("%f\n",input[0]);
+    //printf("%f \n",input[num]);
+    //printf("\n%f %d\n",input[num],output[num]);
 }
 
-void dequantize_8bits(float x[], float min, float max, int len) {
+void dequantize_8bits(uint8_t *input, float min, float max, int len, float *output) {
     uint8_t temp[len]; 
     
     int i;
@@ -66,13 +68,7 @@ void dequantize_8bits(float x[], float min, float max, int len) {
     #pragma omp parallel for
     for (i = 0; i < len; i++) 
     {
-        temp[i] = (uint8_t)round(x[i] / scale) + zero_point;
-    }
-    
-    #pragma omp parallel for
-    for (i = 0; i < len; i++) 
-    {
-        x[i] = (temp[i] - zero_point) * scale;
+        output[i] = (input[i] - zero_point) * scale;
     }
     // dequantize
 }

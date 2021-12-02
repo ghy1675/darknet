@@ -2500,12 +2500,30 @@ void gemm_cpu(int M, int N, int K, float ALPHA,
 {
     int t,k,j;
     
-    float fmin_x=0;
-    float fmax_x=255;
-    float imin_x=0;
-    float imax_x=255;
-    printf("%f : ",A[0]);
+    register float fmin_x=10000000;
+    register float fmax_x=-100000;
+    register float imin_x=10000000;
+    register float imax_x=-100000;
+    //printf("%f : ",A[0]);
+    #pragma omp parallel for
+    for(int i=0;i<K*M;i++)
+    {
+        fmin_x=min(fmin_x, A[i]);
+        fmax_x=max(fmax_x, A[i]);
+    }
+    
+    #pragma omp parallel for
+    for(int i=0;i<K*N;i++)
+    {
+        imin_x=min(imin_x, B[i]);
+        imax_x=max(imax_x, B[i]);
+    }
+    //printf("%f %f\n",fmin_x,fmax_x);
     quantize_8bits(A, fmin_x, fmax_x, K*M, quantA); // input
+    quantize_8bits(B, imin_x, imax_x, K*N, quantB); // input
+    
+    dequantize_8bits(quantA, fmin_x, fmax_x, K*M, A); // input
+    dequantize_8bits(quantB, imin_x, imax_x, K*N, B); // input
     /*
     //quantize_8bits(float input[], float min, float max, int len, uint8_t output)
     //
@@ -2539,12 +2557,8 @@ void gemm_cpu(int TA, int TB, int M, int N, int K, float ALPHA,
         float BETA,
         float *C, int ldc)
 {
-    int fd;
     int t;
-    
-    void *input;
-    void *filter;
-    void *psum;
+
     //printf("CPUCPUCPUCPUCPUCPUCPUCPUCPUCPUCPU\n");
     
     #pragma omp parallel for
