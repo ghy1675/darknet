@@ -27,35 +27,22 @@
 #define MEM_BANK7 0x400030000
 #define MEM_BANK8 0x400038000 // PSum
 
-#define Gemm_En 1 // address
-#define MEM_RST 1 // address
-#define MEM_RD 1  // address
-
 // Memory R/W
 #define MAP_SIZE 98304UL 			// Memory Paging Size 24KB
 #define MAP_MASK (MAP_SIZE - 1) 	// Memory Address Mask
 #define BLOCK_SIZE 24576
-
-struct buffer{
-    uint8_t data[4];
-};
 
 void quantize_8bits(float *input, float min, float max, int len, uint8_t *output) {
     
     int i;
     register float scale = (max - min) / 255;
     register uint8_t zero_point = 0 - round(min / scale);
-    
-    //printf("%f %f",min, max);
-    //printf(" : %f %d\n",scale, zero_point);
-    //printf("%f ",input[num]);
+
     #pragma omp parallel for
     for (i = 0; i < len; i++) 
     {
         output[i] = (uint8_t)round(input[i] / scale) + zero_point;
     }
-    //printf("%f \n",input[num]);
-    //printf("\n%f %d\n",input[num],output[num]);
 }
 
 void dequantize_8bits(uint8_t *input, float min, float max, int len, float *output) {
@@ -70,7 +57,6 @@ void dequantize_8bits(uint8_t *input, float min, float max, int len, float *outp
     {
         output[i] = (input[i] - zero_point) * scale;
     }
-    // dequantize
 }
 
 float compare(const void *a, const void *b)   

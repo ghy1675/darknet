@@ -2572,16 +2572,31 @@ void gemm_cpu(int M, int N, int K, float ALPHA,
         imin_x=min(imin_x, B[i]);
         imax_x=max(imax_x, B[i]);
     }
-    
+    //printf("%f %f\n",fmin_x,fmax_x);
     quantize_8bits(A, fmin_x, fmax_x, K*M, quantA); // filter
     quantize_8bits(B, imin_x, imax_x, K*N, quantB); // input
+    
+    //dequantize_8bits(quantA, fmin_x, fmax_x, K*M, A); // filter
+    //dequantize_8bits(quantB, imin_x, imax_x, K*N, B); // input
+    
+    /*
+    //quantize_8bits(float input[], float min, float max, int len, uint8_t output)
+    //
+    //quantize_8bits(B, imin_x, imax_x, N*K, quantB); // filter
+    
+    //fd = open("/dev/mem",O_RDWR|O_SYNC);
+    //input = mmap(0, MAP_SIZE, PROT_WRITE | PROT_READ, MAP_SHARED, fd, MEM_BANK1);
+    //filter = mmap(0, MAP_SIZE, PROT_WRITE | PROT_READ, MAP_SHARED, fd, MEM_BANK4);
+    //psum = mmap(0, 65536, PROT_WRITE | PROT_READ, MAP_SHARED, fd, MEM_BANK7);
+    */
 
     fd = open("/dev/mem",O_RDWR|O_SYNC);
     
     filter = mmap(0, MAP_SIZE, PROT_WRITE | PROT_READ, MAP_SHARED, fd, MEM_BANK1);
     input = mmap(0, MAP_SIZE, PROT_WRITE | PROT_READ, MAP_SHARED, fd, MEM_BANK4);
     //psum = mmap(0, 65536, PROT_WRITE | PROT_READ, MAP_SHARED, fd, MEM_BANK7);
-    //printf("M : %d N : %d K : %d\n",M,N,K);
+    printf("M : %d N : %d K : %d\n",M,N,K);
+
 
     #pragma omp parallel for
     for (t = 0; t < M; t++) 
@@ -2613,9 +2628,9 @@ void gemm_cpu(int M, int N, int K, float ALPHA,
                 memcpy(input, &quantB[k*ldb+j], sizeof(uint8_t)*block);
             }
             
-            // Enable Signal
+               // Enable Signal
             
-            for(j=k*ldb+c_len*block;j<N;j+=4)
+            for(j=k*ldb+c_len*block;j<N;j++)
             {
                 virt_addr = input + offset;
                 partial = partial +(quantB[i]<<24);
